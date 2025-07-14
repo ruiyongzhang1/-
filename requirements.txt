@@ -82,3 +82,9 @@ Werkzeug==3.1.3
 xxhash==3.5.0
 yarl==1.20.1
 zstandard==0.23.0
+<<<<<<< Updated upstream
+=======
+mysql-connector-python
+jieba
+chromadbs
+>>>>>>> Stashed changes

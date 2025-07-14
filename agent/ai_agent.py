@@ -5,6 +5,9 @@ import time
 import traceback
 import concurrent.futures
 from typing import Dict, Any, List, Optional, Generator
+from agent.RAG.retriever import rag_search
+from agent.sql.attraction_ezqa_service import qa_service
+
 
 # 抑制LangChain弃用警告
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -43,6 +46,8 @@ except ImportError:
 # 1. Component and Utility Classes (The Foundation)
 # 这些是构成系统的基础模块，每个类职责单一。
 # =============================================================================
+
+
 
 class ConfigManager:
     """统一配置管理"""
@@ -198,6 +203,7 @@ class PlannerAgent:
             planning_content = f"用户原始需求：\n{message}\n\n信息收集智能体提供的详细信息：\n{collected_info}"
         else:
             planning_content = f"用户需求：\n{message}"
+        planning_content = planning_content + rag_search(message, top_k=3)['context']  # 添加RAG搜索结果
         
         # 构建包含历史记忆的消息列表
         messages = [SystemMessage(content=ITINERARY_PLANNER_PROMPT)]
@@ -361,7 +367,10 @@ class AgentService:
 
             if agent_type == "general":
                 agent = session['normal_agent']
-                generator = agent.get_response_stream(user_message, conversation_history)
+                answer = qa_service.get_answer(user_message)
+                sql_message = user_message + f"本地查找到资料信息：{answer}"
+                # print(sql_message)
+                generator = agent.get_response_stream(sql_message, conversation_history)
             
             elif agent_type == "travel":
                 if is_travel_planning_request(user_message):
