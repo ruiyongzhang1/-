@@ -38,11 +38,7 @@ class PDFGeneratorTool:
         if output_dir:
             self.output_dir = output_dir
         else:
-            # 根据操作系统设置默认目录
-            if os.name == 'nt':  # Windows
-                self.output_dir = r"C:\new_py\static\pdfs"
-            else:  # Linux/Mac
-                # 使用当前项目目录下的static/pdfs
+            # 使用当前项目目录下的static/pdfs，统一跨平台
                 current_dir = os.path.dirname(os.path.abspath(__file__))
                 project_root = os.path.dirname(current_dir)
                 self.output_dir = os.path.join(project_root, "static", "pdfs")
@@ -86,7 +82,7 @@ class PDFGeneratorTool:
         # 配置wkhtmltopdf
         config = self._get_wkhtmltopdf_config()
         
-        # 生成PDF选项
+        # 生成PDF选项 - 解决Linux中文乱码问题
         options = {
             'page-size': 'A4',
             'margin-top': '0.75in',
@@ -95,7 +91,15 @@ class PDFGeneratorTool:
             'margin-left': '0.75in',
             'encoding': "UTF-8",
             'no-outline': None,
-            'enable-local-file-access': None
+            'enable-local-file-access': None,
+            # Linux字体配置
+            'custom-header': [
+                ('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')
+            ],
+            'disable-smart-shrinking': None,
+            'print-media-type': None,
+            'load-error-handling': 'ignore',
+            'load-media-error-handling': 'ignore'
         }
         
         # 从字符串生成PDF
@@ -163,12 +167,8 @@ class PDFGeneratorTool:
         content = f"""智能旅行规划报告
 生成时间: {datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')}
 
-AI总结报告:
+AI总结概括报告:
 {summary if summary else '暂无总结'}
-
-完整对话记录:
-{conversation_data}
-
 本报告由青鸾向导AI旅行规划系统生成
 """
 
@@ -189,7 +189,7 @@ AI总结报告:
             <title>智能旅行规划报告</title>
             <style>
                 body {{ 
-                    font-family: 'Microsoft YaHei', 'SimSun', 'Arial', sans-serif; 
+                    font-family: 'WenQuanYi Zen Hei', 'WenQuanYi Micro Hei', 'Microsoft YaHei', 'SimSun', 'Arial', sans-serif; 
                     line-height: 1.6;
                     margin: 40px;
                     color: #333;
