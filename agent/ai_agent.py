@@ -92,19 +92,171 @@ class MCPManager:
     
     async def load_tools_async(self) -> List[Any]:
         """异步加载MCP工具"""
-        if not MCP_AVAILABLE or not os.path.exists(self.config.mcp_server_path):
-            if not MCP_AVAILABLE: print("MCP依赖库不可用，返回空工具列表")
-            else: print(f"警告: MCP服务器文件不存在: {self.config.mcp_server_path}")
-            return []
-            
         try:
-            server_params = self.config.get_server_params()
-            async with stdio_client(server_params) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    tools = await load_mcp_tools(session)
-                    print(f"异步加载了 {len(tools)} 个MCP工具")
-                    return tools
+            # 直接导入本地MCP工具，避免MCP协议加载问题
+            from agent.mcp_server import get_current_time, search_google, search_google_maps, search_google_flights, search_google_hotels
+            from langchain.tools import tool
+            
+            # 创建LangChain工具包装器
+            tools = []
+            
+            # 包装get_current_time
+            @tool
+            async def get_current_time_tool(format: str = "iso") -> str:
+                """获取当前系统时间和旅行日期建议"""
+                result = await get_current_time(format=format)
+                if isinstance(result, dict) and "date" in result:
+                    return f"当前时间: {result['date']}"
+                else:
+                    return str(result)
+            
+            # 包装search_google
+            @tool
+            async def search_google_tool(q: str) -> str:
+                """搜索Google搜索结果"""
+                result = await search_google(q=q)
+                if isinstance(result, dict):
+                    if "error" in result:
+                        return f"搜索失败: {result['error']}"
+                    elif "organic_results" in result:
+                        results = result["organic_results"][:5]  # 取前5个结果
+                        search_summary = []
+                        for r in results:
+                            title = r.get('title', '')
+                            snippet = r.get('snippet', '')[:100]  # 截取前100字符
+                            search_summary.append(f"{title}: {snippet}")
+                        return f"找到 {len(results)} 个搜索结果:\n" + "\n".join(search_summary)
+                    else:
+                        return f"搜索完成，结果: {list(result.keys())}"
+                else:
+                    return str(result)
+            
+            # 包装search_google_maps
+            @tool
+            async def search_google_maps_tool(query: str) -> str:
+                """搜索Google地图上的地点或服务"""
+                result = await search_google_maps(query=query)
+                if isinstance(result, dict):
+                    if "error" in result:
+                        return f"地图搜索失败: {result['error']}"
+                    elif "local_results" in result:
+                        results = result["local_results"][:5]  # 取前5个结果
+                        map_summary = []
+                        for r in results:
+                            title = r.get('title', '')
+                            address = r.get('address', '')
+                            rating = r.get('rating', '')
+                            map_summary.append(f"{title} - {address} - 评分:{rating}")
+                        return f"找到 {len(results)} 个地点:\n" + "\n".join(map_summary)
+                    else:
+                        return f"地图搜索完成，结果: {list(result.keys())}"
+                else:
+                    return str(result)
+            
+            # 包装search_google_flights
+            @tool
+            async def search_google_flights_tool(departure_id: str, arrival_id: str, outbound_date: str, flight_type: str = "round_trip", return_date: str = None) -> str:
+                """搜索Google航班信息"""
+                # 自动处理日期，如果没有提供或日期不合理
+                from datetime import datetime, timedelta
+                today = datetime.now()
+                
+                if not outbound_date:
+                    outbound_date = (today + timedelta(days=7)).strftime("%Y-%m-%d")
+                else:
+                    try:
+                        outbound = datetime.strptime(outbound_date, "%Y-%m-%d")
+                        if outbound.date() < today.date():
+                            outbound_date = (today + timedelta(days=7)).strftime("%Y-%m-%d")
+                    except ValueError:
+                        outbound_date = (today + timedelta(days=7)).strftime("%Y-%m-%d")
+                
+                if flight_type == "round_trip" and not return_date:
+                    return_date = (today + timedelta(days=14)).strftime("%Y-%m-%d")
+                
+                result = await search_google_flights(
+                    departure_id=departure_id,
+                    arrival_id=arrival_id,
+                    outbound_date=outbound_date,
+                    flight_type=flight_type,
+                    return_date=return_date
+                )
+                if isinstance(result, dict):
+                    if "error" in result:
+                        return f"航班搜索失败: {result['error']}"
+                    elif "flights" in result:
+                        flights = result["flights"][:5]  # 取前5个航班
+                        flight_summary = []
+                        for flight in flights:
+                            airline = flight.get('airline', '')
+                            departure_time = flight.get('departure_time', '')
+                            arrival_time = flight.get('arrival_time', '')
+                            price = flight.get('price', '')
+                            flight_summary.append(f"{airline} - {departure_time}到{arrival_time} - {price}")
+                        return f"找到 {len(flights)} 个航班:\n" + "\n".join(flight_summary)
+                    else:
+                        return f"航班搜索完成，结果: {list(result.keys())}"
+                else:
+                    return str(result)
+            
+            # 包装search_google_hotels
+            @tool
+            async def search_google_hotels_tool(q: str, check_in_date: str = None, check_out_date: str = None) -> str:
+                """搜索Google酒店信息"""
+                # 如果没有提供日期，自动使用合理的未来日期
+                from datetime import datetime, timedelta
+                today = datetime.now()
+                
+                if not check_in_date:
+                    check_in_date = (today + timedelta(days=1)).strftime("%Y-%m-%d")
+                if not check_out_date:
+                    check_out_date = (today + timedelta(days=3)).strftime("%Y-%m-%d")
+                
+                # 验证日期是否合理（不能是过去日期）
+                try:
+                    check_in = datetime.strptime(check_in_date, "%Y-%m-%d")
+                    if check_in.date() < today.date():
+                        # 如果入住日期是过去，调整为明天
+                        check_in_date = (today + timedelta(days=1)).strftime("%Y-%m-%d")
+                        check_out_date = (today + timedelta(days=3)).strftime("%Y-%m-%d")
+                except ValueError:
+                    # 如果日期格式错误，使用默认日期
+                    check_in_date = (today + timedelta(days=1)).strftime("%Y-%m-%d")
+                    check_out_date = (today + timedelta(days=3)).strftime("%Y-%m-%d")
+                
+                result = await search_google_hotels(
+                    q=q,
+                    check_in_date=check_in_date,
+                    check_out_date=check_out_date
+                )
+                if isinstance(result, dict):
+                    if "error" in result:
+                        return f"酒店搜索失败: {result['error']}"
+                    elif "properties" in result:
+                        properties = result["properties"][:5]  # 取前5个酒店
+                        hotel_list = []
+                        for prop in properties:
+                            title = prop.get('title', '未知酒店')
+                            price = prop.get('price', '价格未知')
+                            rating = prop.get('rating', '评分未知')
+                            hotel_list.append(f"{title} - {price} - 评分:{rating}")
+                        return f"找到 {len(properties)} 个酒店: {'; '.join(hotel_list)}"
+                    else:
+                        return f"酒店搜索完成，结果: {list(result.keys())}"
+                else:
+                    return str(result)
+            
+            tools = [
+                get_current_time_tool,
+                search_google_tool,
+                search_google_maps_tool,
+                search_google_flights_tool,
+                search_google_hotels_tool
+            ]
+            
+            print(f"异步加载了 {len(tools)} 个本地MCP工具")
+            return tools
+            
         except Exception as e:
             print(f"异步加载MCP工具失败: {e}")
             return []
@@ -112,8 +264,12 @@ class MCPManager:
     def load_tools_sync(self) -> List[Any]:
         """同步加载MCP工具的包装器"""
         try:
-            # Note: Using asyncio.run() is simpler and safer than managing loops directly
-            return asyncio.run(self.load_tools_async())
+            # 使用AsyncSyncWrapper来避免事件循环问题
+            tools = AsyncSyncWrapper.run_async_in_thread(self.load_tools_async)
+            print(f"[DEBUG] MCPManager.load_tools_sync() 返回的tools:")
+            for idx, tool in enumerate(tools):
+                print(f"  Tool {idx}: type={type(tool)}, name={getattr(tool, 'name', None)}, desc={getattr(tool, 'description', None)}, args_schema={getattr(tool, 'args_schema', None)}")
+            return tools
         except Exception as e:
             print(f"同步加载MCP工具失败: {e}")
             return []
@@ -175,9 +331,32 @@ class InformationCollectorAgent:
         if not self.agent:
             return f"信息收集智能体不可用（工具加载失败），无法处理请求: {user_request}"
         
+        print(f"\n🔍 [MCP调试] 开始信息收集，用户请求: {user_request}")
+        print(f"🔧 [MCP调试] 可用工具数量: {len(self.tools)}")
+        
         collector_request = f"{INFORMATION_COLLECTOR_PROMPT}\n用户需求:{user_request}"
-        response = await self.agent.ainvoke({"messages": [{"role": "user", "content": collector_request}]})
-        return ResponseExtractor.extract_agent_response(response)
+        
+        print(f"📝 [MCP调试] 发送给智能体的提示词长度: {len(collector_request)} 字符")
+        
+        try:
+            print(f"🚀 [MCP调试] 开始调用智能体，预计会使用MCP工具进行搜索...")
+            # 使用正确的LangGraph 0.5.2 API格式
+            from langchain.schema import HumanMessage
+            response = await self.agent.ainvoke({"messages": [HumanMessage(content=collector_request)]})
+            
+            # 提取响应内容
+            response_content = ResponseExtractor.extract_agent_response(response)
+            
+            print(f"✅ [MCP调试] 信息收集完成，响应长度: {len(response_content)} 字符")
+            print(f"📊 [MCP调试] 响应内容预览: {response_content[:200]}...")
+            
+            return response_content
+            
+        except Exception as e:
+            print(f"❌ [MCP调试] 信息收集过程中出现错误: {e}")
+            import traceback
+            traceback.print_exc()
+            return f"信息收集失败: {str(e)}"
     
     def get_response_stream(self, message: str):
         """获取响应流"""
@@ -378,9 +557,21 @@ class AgentService:
                     collector_agent = session['collector']
                     planner_agent = session['planner']
                     
+                    print(f"\n🎯 [旅行规划] 检测到旅行规划请求: {user_message}")
+                    print(f"🔧 [旅行规划] 信息收集智能体工具数量: {len(collector_agent.tools)}")
+                    print(f"📅 [旅行规划] 开始信息收集阶段...")
+                    
                     print("旅行规划流程: [1] 信息收集中...")
-                    collected_info = AsyncSyncWrapper.run_async_in_thread(lambda: collector_agent.collect_information_async(user_message))
-                    print("旅行规划流程: [2] 开始流式规划...")
+                    # 直接使用同步方式调用信息收集
+                    collected_info = collector_agent.get_response_stream(user_message)
+                    # 收集完整响应
+                    collected_info_text = ""
+                    for chunk in collected_info:
+                        collected_info_text += chunk
+                    
+                    print(f"📊 [旅行规划] 信息收集完成，收集到的信息长度: {len(collected_info_text)} 字符")
+                    print(f"📋 [旅行规划] 收集到的信息预览: {collected_info_text[:300]}...")
+                    print("旅行规划流程: [2] 开始流式行程规划...")
                     generator = planner_agent.get_response_stream(user_message, collected_info, conversation_history)
                 else:
                     # Simple travel question with memory
