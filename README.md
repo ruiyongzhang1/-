@@ -25,16 +25,12 @@ else:
     print("没有找到相关信息")
 
 # ============================================================================
-# 配置好环境，运行tes1.py。会自动创建向量库并搜索
-# 添加新pdf/.txt到 DOC_DIR 目录后，删除向量库重新构建：
-# 1. 删除 VECTOR_DIR 目录（或chroma.sqlite3文件）
-# 2. 重新调用 init_vectorstore() 或 rag_search()
-
+# 配置好环境，运行tes1.py。
 # ============================================================================
 # 需要的环境变量配置 (.env文件)
 # ============================================================================
   
-# DOC_DIR=C:/Users/TzumingPeng/Desktop/pdf  （110个pdf的位置）
+# DOC_DIR=./pdf  （110个pdf的位置）
 # VECTOR_DIR=./vector_db/knowledge.demo      （词向量库建立成功后，存在的的文件位置）
 # COLLECTION_NAME=travel_information          （向量库集合名）
 # EMBED_MODEL=text-embedding-ada-002            （模型名称）
