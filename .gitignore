@@ -41,3 +41,5 @@ build/
 
 # Local IDE or editor folders
 .idea/
+*.db
+CLAUDE.md
