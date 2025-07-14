@@ -10,7 +10,9 @@ from mcp.server.fastmcp import FastMCP
 from datetime import datetime, timedelta
 
 # 配置API密钥
-SEARCHAPI_API_KEY = os.getenv("SEARCHAPI_API_KEY", "c8cb17de81b0d6a3cc1d6a6269795d7ab1073c2bbc13b47e2d0c5b21a2ba9c21")
+SEARCHAPI_API_KEY = os.getenv("SEARCHAPI_API_KEY")
+if not SEARCHAPI_API_KEY:
+    print("警告: 未设置SEARCHAPI_API_KEY环境变量，MCP工具可能无法正常工作")
 
 # 初始化 FastMCP 服务器
 mcp = FastMCP("Travel Planner")
