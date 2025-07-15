@@ -6,6 +6,37 @@
     <title>青鸾向导</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='icon.png') }}" type="image/png">
+    <style>
+        /* 添加紧凑布局样式 */
+        .compact-form .form-group {
+            margin-bottom: 12px; /* 减小间距 */
+        }
+        
+        .compact-form .form-group label {
+            font-size: 14px; /* 减小标签字号 */
+        }
+        
+        .compact-form input, 
+        .compact-form select,
+        .compact-form .btn-send-code {
+            padding: 8px 10px; /* 减小内边距 */
+            font-size: 14px; /* 减小输入文字大小 */
+        }
+        
+        .compact-form .email-input-group,
+        .compact-form .verification-input-group {
+            gap: 5px; /* 减小元素间距 */
+        }
+        
+        .compact-form .btn {
+            padding: 10px; /* 减小按钮高度 */
+            margin-top: 5px;
+        }
+        
+        .compact-form .switch-form {
+            margin-top: 10px; /* 减小顶部间距 */
+        }
+    </style>
 </head>
 <body>
     <div class="login-container">
@@ -17,7 +48,7 @@
             <div id="login-form">
                 <h2>登录</h2>
                 {% if error %}
-                <div class="error-message">未注册或账号、密码错误</div>
+                <div class="error-message">{{ error }}</div>
                 {% endif %}
                 <form action="/login" method="POST">
                     <div class="form-group">
@@ -33,13 +64,8 @@
                 <p class="switch-form">没有账号？<a href="#" id="show-register">点击注册</a></p>
             </div>
             
-            <div id="register-form" style="display:none;">
+            <div id="register-form" style="display:none;" class="compact-form">
                 <h2>注册</h2>
-                <!-- 这是一个注释，
-                {% if error %}
-                <div class="error-message">无效账号</div>
-                {% endif %}
-                -->
                 <form action="/register" method="POST" id="registerForm">
                     <div class="form-group">
                         <label for="reg-username">电子邮箱<span class="required-star">*</span></label>
@@ -62,6 +88,15 @@
                         <label for="reg-password2">再次确认密码<span class="required-star">*</span></label>
                         <input type="password" id="reg-password2" name="password2" required>
                     </div>
+                    <!-- 添加验证码输入框 -->
+                    <div class="form-group">
+                        <label for="verification-code">验证码<span class="required-star">*</span></label>
+                        <div class="verification-input-group">
+                            <input type="text" id="verification-code" name="verification_code" required 
+                                   placeholder="请输入验证码" class="email-verification-input">
+                            <button type="button" id="send-code-btn" class="btn-send-code">发送验证码</button>
+                        </div>
+                    </div>
                     <button type="submit" class="btn">立即注册</button>
                 </form>
                 <p class="switch-form">已有账号？<a href="#" id="show-login">登录</a></p>
@@ -81,17 +116,20 @@
             document.getElementById('register-form').style.display = 'none';
             document.getElementById('login-form').style.display = 'block';
         });
+        
         // 注册表单邮箱拼接与校验
         document.getElementById('registerForm').addEventListener('submit', function(e) {
             const username = document.getElementById('reg-username').value.trim();
             const domain = document.getElementById('reg-domain').value;
             const email = username + domain;
+            
             // 简单校验用户名部分
             if (!username.match(/^[a-zA-Z0-9._%-]+$/)) {
                 alert('邮箱用户名格式不正确');
                 e.preventDefault();
                 return false;
             }
+            
             // 拼接邮箱到隐藏input
             let hidden = document.getElementById('reg-email-hidden');
             if (!hidden) {
@@ -102,6 +140,72 @@
                 this.appendChild(hidden);
             }
             hidden.value = email;
+        });
+        
+        // 发送验证码功能
+        document.getElementById('send-code-btn').addEventListener('click', function() {
+            const username = document.getElementById('reg-username').value.trim();
+            const domain = document.getElementById('reg-domain').value;
+            const email = username + domain;
+            
+            // 简单的邮箱格式校验
+            if (!username.match(/^[a-zA-Z0-9._%-]+$/)) {
+                alert('邮箱用户名格式不正确');
+                return;
+            }
+            
+            // 禁用按钮并显示倒计时
+            const btn = document.getElementById('send-code-btn');
+            btn.disabled = true;
+            btn.textContent = '发送中...';
+            
+            // 发送请求到后端获取验证码
+            fetch('/send_verification_code', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email: email })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('验证码已发送，请查收！');
+                    
+                    // 开始倒计时
+                    let countdown = 60;
+                    const timer = setInterval(() => {
+                        btn.textContent = `重新发送(${countdown})`;
+                        countdown--;
+                        if (countdown < 0) {
+                            clearInterval(timer);
+                            btn.disabled = false;
+                            btn.textContent = '发送验证码';
+                        }
+                    }, 1000);
+                } else {
+                    alert(data.message);
+                    btn.disabled = false;
+                    btn.textContent = '发送验证码';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('服务器解析出错，请检查或稍后再试');
+                btn.disabled = false;
+                btn.textContent = '发送验证码';
+            });
+        });
+        
+        // 验证码输入框样式反馈
+        const verificationInput = document.getElementById('verification-code');
+        verificationInput.addEventListener('input', function() {
+            if (this.value.length > 0) {
+                this.classList.add('verification-success');
+                this.classList.remove('verification-error');
+            } else {
+                this.classList.remove('verification-success');
+            }
         });
     </script>
 </body>
