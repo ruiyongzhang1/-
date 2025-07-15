@@ -760,3 +760,94 @@ body::before {
     box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.15);
     background: #fff;
 }
+
+
+/* 邮箱验证相关样式 */
+.verification-input-group {
+    display: flex;
+    gap: 8px;
+}
+
+#verification-code {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+#verification-code:focus {
+    border-color: var(--primary-color);
+    outline: none;
+}
+
+.btn-send-code {
+    padding: 12px 15px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    white-space: nowrap;
+}
+
+.btn-send-code:hover {
+    background-color: var(--secondary-color);
+}
+
+.btn-send-code:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.verification-success {
+    border-color: var(--success-color) !important;
+}
+
+.verification-error {
+    border-color: var(--error-color) !important;
+}
+
+/* 邮箱后缀下拉框优化 */
+.email-input-group select {
+    background: linear-gradient(90deg, #e0eafc 0%, #cfdef3 100%);
+    color: #212529;
+    border: 1px solid #b3c6e0;
+    border-left: none;
+    border-radius: 0 5px 5px 0;
+    font-size: 16px;
+    padding: 12px 36px 12px 12px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    box-shadow: 0 2px 8px rgba(67, 97, 238, 0.06);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M4 6L8 10L12 6' stroke='%234361ee' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 18px 18px;
+}
+
+.email-input-group select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.15);
+    background: #fff;
+}
+
+.email-input-group input[type="text"] {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right: none;
+    background: #f9f9f9;
+    transition: box-shadow 0.3s;
+}
+
+.email-input-group input[type="text"]:focus {
+    box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.15);
+    background: #fff;
+}
