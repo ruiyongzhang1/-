@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ url_for('static', filename='icon.png') }}" type="image/png">
+    <title>青鸾向导 - 后台管理系统</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+        
+        :root {
+            --primary: #4361ee;
+            --primary-dark: #3a0ca3;
+            --secondary: #4cc9f0;
+            --success: #2ecc71;
+            --warning: #ff9f1c;
+            --danger: #e74c3c;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --gray: #64748b;
+            --gray-light: #e2e8f0;
+            --border-radius: 12px;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --transition: all 0.3s ease;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1e1e2f 0%, #2d2b55 100%);
+            color: #334155;
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .login-container {
+            display: flex;
+            width: 100%;
+            max-width: 1000px;
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        
+        .login-brand {
+            flex: 1;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 60px 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
+        }
+        
+        .login-brand h1 {
+            font-size: 36px;
+            font-weight: 800;
+            margin-bottom: 20px;
+        }
+        
+        .login-brand p {
+            font-size: 18px;
+            opacity: 0.85;
+            margin-bottom: 40px;
+        }
+        
+        .brand-highlights {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 30px;
+        }
+        
+        .highlight {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            backdrop-filter: blur(5px);
+        }
+        
+        .highlight i {
+            font-size: 28px;
+            margin-bottom: 15px;
+            color: var(--secondary);
+        }
+        
+        .login-form {
+            width: 400px;
+            padding: 50px 40px;
+        }
+        
+        .form-header {
+            margin-bottom: 30px;
+        }
+        
+        .form-header h2 {
+            font-size: 28px;
+            color: var(--dark);
+            margin-bottom: 10px;
+        }
+        
+        .form-header p {
+            color: var(--gray);
+        }
+        
+        .error-message {
+            background-color: #ffebee;
+            color: var(--danger);
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .error-message i {
+            margin-right: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .input-with-icon {
+            position: relative;
+        }
+        
+        .input-with-icon i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--gray);
+        }
+        
+        .input-with-icon input {
+            width: 100%;
+            padding: 14px 14px 14px 45px;
+            border: 1px solid var(--gray-light);
+            border-radius: 8px;
+            font-size: 16px;
+            transition: var(--transition);
+        }
+        
+        .input-with-icon input:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--dark);
+        }
+        
+        .remember-forgot {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 15px 0 25px;
+            font-size: 14px;
+        }
+        
+        .remember {
+            display: flex;
+            align-items: center;
+        }
+        
+        .remember input {
+            margin-right: 8px;
+        }
+        
+        .forgot-password {
+            color: var(--primary);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+        
+        .forgot-password:hover {
+            color: var(--primary-dark);
+            text-decoration: underline;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            margin-top: 10px;
+        }
+        
+        .btn:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+        
+        @media (max-width: 900px) {
+            .login-container {
+                flex-direction: column;
+            }
+            
+            .login-brand {
+                padding: 40px 20px;
+            }
+            
+            .login-form {
+                width: 100%;
+                padding: 40px 30px;
+            }
+            
+            .brand-highlights {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-brand">
+            <h1>青鸾向导</h1>
+            <p>智能旅游规划后台管理系统</p>
+            
+            <div class="brand-highlights">
+                <div class="highlight">
+                    <i class="fas fa-shield-alt"></i>
+                    <h3>安全可靠</h3>
+                    <p>数据加密保护</p>
+                </div>
+                <div class="highlight">
+                    <i class="fas fa-chart-line"></i>
+                    <h3>数据分析</h3>
+                    <p>实时数据可视化</p>
+                </div>
+                <div class="highlight">
+                    <i class="fas fa-users-cog"></i>
+                    <h3>用户管理</h3>
+                    <p>全面控制用户权限</p>
+                </div>
+                <div class="highlight">
+                    <i class="fas fa-cogs"></i>
+                    <h3>智能配置</h3>
+                    <p>自动化系统管理</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="login-form">
+            <div class="form-header">
+                <h2>管理员登录</h2>
+                <p>请输入您的账号密码访问管理面板</p>
+            </div>
+            
+            <div id="loginError" class="error-message" style="display: none;">
+                <i class="fas fa-exclamation-circle"></i>
+                <span id="errorText">账号或密码错误</span>
+            </div>
+            
+            <form id="adminLoginForm">
+                <div class="form-group">
+                    <label for="admin-email">电子邮箱</label>
+                    <div class="input-with-icon">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" id="admin-email" name="email" placeholder="admin@example.com" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="admin-password">密码</label>
+                    <div class="input-with-icon">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="admin-password" name="password" placeholder="请输入密码" required>
+                    </div>
+                </div>
+                
+                <div class="remember-forgot">
+                    <div class="remember">
+                        <input type="checkbox" id="remember">
+                        <label for="remember">记住我</label>
+                    </div>
+                    <a href="#" class="forgot-password" id="forgotLink">忘记密码?</a>
+                </div>
+                
+                <button type="submit" class="btn">登录管理面板</button>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        // 忘记密码提示
+        document.getElementById('forgotLink').addEventListener('click', function(e) {
+            e.preventDefault();
+            alert('请与超级管理员联系以重置密码。');
+        });
+
+        document.getElementById('adminLoginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('admin-email').value;
+            const password = document.getElementById('admin-password').value;
+            const errorElement = document.getElementById('loginError');
+            
+            // 简单前端验证
+            if (!email || !password) {
+                document.getElementById('errorText').textContent = '请输入邮箱和密码';
+                errorElement.style.display = 'flex';
+                return;
+            }
+            
+            // 后端验证
+            fetch('/admin_login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 登录成功，跳转后台首页
+                    window.location.href = '/admin';
+                } else {
+                    // 登录失败
+                    document.getElementById('errorText').textContent = data.message || '账号或密码错误';
+                    errorElement.style.display = 'flex';
+                }
+            })
+            .catch(err => {
+                console.error('登录请求失败:', err);
+                document.getElementById('errorText').textContent = '登录请求失败，请稍后重试';
+                errorElement.style.display = 'flex';
+            });
+        });
+    </script>
+</body>
+</html>
