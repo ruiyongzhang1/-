@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{{ url_for('static', filename='icon.png') }}" type="image/png">
+    <title>青鸾向导 - 后台管理</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+</head>
+<body>
+    <!-- 侧边导航 -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="brand">
+                <div class="brand-icon">
+                    <!--<i class="fas fa-dove"></i>-->
+                    <img src="{{ url_for('static', filename='icon.png') }}" alt="Logo" class="logo">
+                </div>
+                <div class="brand-name">青鸾向导</div>
+            </div>
+        </div>
+        
+        <div class="sidebar-menu">
+            <div class="menu-title">主导航</div>
+            <div class="menu-item active" data-section="dashboard">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>仪表盘</span>
+            </div>
+            <div class="menu-item" data-section="users">
+                <i class="fas fa-users"></i>
+                <span>用户管理</span>
+            </div>
+            <div class="menu-item" data-section="conversations">
+                <i class="fas fa-comments"></i>
+                <span>会话管理</span>
+            </div>
+            <div class="menu-item" data-section="messages">
+                <i class="fas fa-envelope"></i>
+                <span>消息管理</span>
+            </div>
+            
+            <!--<div class="menu-title">系统设置</div>
+            <div class="menu-item" data-section="system">
+                <i class="fas fa-cog"></i>
+                <span>系统设置</span>
+            </div>-->
+            <!-- 新增管理员管理菜单 -->
+            <div class="menu-title">管理员管理</div>
+            <div class="menu-item" data-section="admins">
+                <i class="fas fa-user-shield"></i>
+                <span>管理员管理</span>
+            </div>
+            <div class="menu-item" data-section="admin-logs">
+                <i class="fas fa-history"></i>
+                <span>操作日志</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 主内容区 -->
+    <div class="main-content">
+        <!-- 顶部导航栏 -->
+        <div class="header">
+            <div class="header-title">管理控制台</div>
+            
+            <div class="header-actions">
+                <div class="admin-profile">
+                    <div class="admin-avatar">AD</div>
+                    <div class="admin-name">管理员</div>
+                    <a href="/admin_logout" style="color: var(--danger); margin-left: 15px;">
+                        <i class="fas fa-sign-out-alt"></i> 退出
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 内容区域 -->
+        <div class="content">
+            <!-- 仪表盘内容 -->
+            <div class="content-section active" id="dashboard-section">
+                <div class="content-header">
+                    <h1>仪表盘</h1>
+                    <div class="breadcrumb">
+                        <a href="#" onclick="showSection('dashboard')">首页</a>
+                        <span>/</span>
+                        <span>仪表盘</span>
+                    </div>
+                </div>
+                
+                <!-- 错误消息 -->
+                <div id="dashboard-error" class="error-message" style="display: none;">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="error-text">加载数据失败</span>
+                </div>
+                
+                <!-- 统计卡片 -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div>
+                                <div class="stat-title">总用户数</div>
+                                <div class="stat-value" id="total-users">0</div>
+                                <div class="stat-change up">
+                                    <!--<i class="fas fa-arrow-up"></i>-->
+                                    <!--<span>12.5% 较上月</span>-->
+                                </div>
+                            </div>
+                            <div class="stat-icon bg-primary">
+                                <i class="fas fa-users"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div>
+                                <div class="stat-title">活跃用户</div>
+                                <div class="stat-value" id="active-users">0</div>
+                                <div class="stat-change up">
+                                    <!--<i class="fas fa-arrow-up"></i>-->
+                                    <!--<span>8.2% 较上周</span>-->
+                                </div>
+                            </div>
+                            <div class="stat-icon bg-success">
+                                <i class="fas fa-user-check"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div>
+                                <div class="stat-title">会话数量</div>
+                                <div class="stat-value" id="total-conversations">0</div>
+                                <div class="stat-change down">
+                                    <!--<i class="fas fa-arrow-down"></i>-->
+                                    <!--<span>3.4% 较上周</span>-->
+                                </div>
+                            </div>
+                            <div class="stat-icon bg-warning">
+                                <i class="fas fa-comments"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div>
+                                <div class="stat-title">消息总数</div>
+                                <div class="stat-value" id="total-messages">0</div>
+                                <div class="stat-change up">
+                                    <!--<i class="fas fa-arrow-up"></i>-->
+                                    <!--<span>15.7% 较上月</span>-->
+                                </div>
+                            </div>
+                            <div class="stat-icon bg-danger">
+                                <i class="fas fa-envelope"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 最近活动 -->
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>最近用户活动</h2>
+                    </div>
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>用户</th>
+                                <th>最后登录</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-users">
+                            <tr><td colspan="3" class="loading"><div class="loading-spinner"></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- 用户管理 -->
+            <div class="content-section" id="users-section">
+                <div class="content-header">
+                    <h1>用户管理</h1>
+                    <div class="breadcrumb">
+                        <a href="#" onclick="showSection('dashboard')">首页</a>
+                        <span>/</span>
+                        <span>用户管理</span>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>用户列表</h2>
+                        <div class="table-tools">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" placeholder="搜索用户..." id="user-search">
+                                <div class="search-tip">按用户邮箱搜索</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>邮箱</th>
+                                <th>注册时间</th>
+                                <th>最后登录</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body">
+                            <tr><td colspan="5" class="loading"><div class="loading-spinner"></div></td></tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="pagination" id="users-pagination">
+                        <!-- 分页控件 -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 会话管理 -->
+            <div class="content-section" id="conversations-section">
+                <div class="content-header">
+                    <h1>会话管理</h1>
+                    <div class="breadcrumb">
+                        <a href="#" onclick="showSection('dashboard')">首页</a>
+                        <span>/</span>
+                        <span>会话管理</span>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>会话列表</h2>
+                        <div class="table-tools">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" placeholder="搜索会话..." id="conversation-search">
+                                <div class="search-tip">按会话ID或用户邮箱搜索</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>会话ID</th>
+                                <th>用户</th>
+                                <th>日期</th>
+                                <th>消息数</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="conversations-table-body">
+                            <tr><td colspan="5" class="loading"><div class="loading-spinner"></div></td></tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="pagination" id="conversations-pagination">
+                        <!-- 分页控件 -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 消息管理 -->
+            <div class="content-section" id="messages-section">
+                <div class="content-header">
+                    <h1>消息管理</h1>
+                    <div class="breadcrumb">
+                        <a href="#" onclick="showSection('dashboard')">首页</a>
+                        <span>/</span>
+                        <span>消息管理</span>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>消息列表</h2>
+                        <div class="table-tools">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" placeholder="搜索消息..." id="message-search">
+                                <div class="search-tip">按消息内容、用户邮箱或会话ID搜索</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>用户</th>
+                                <th>会话ID</th>
+                                <th>内容</th>
+                                <th>时间</th>
+                                <th>类型</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="messages-table-body">
+                            <tr><td colspan="6" class="loading"><div class="loading-spinner"></div></td></tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="pagination" id="messages-pagination">
+                        <!-- 分页控件 -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 用户详情 -->
+            <div class="content-section" id="user-detail-section">
+                <div class="content-header">
+                    <h1 id="user-detail-name">用户详情</h1>
+                    <div class="breadcrumb">
+                        <a href="#" onclick="showSection('users')">用户管理</a>
+                        <span>/</span>
+                        <span id="user-detail-email">用户详情</span>
+                    </div>
+                </div>
+                
+                <div class="user-detail-card">
+                    <div class="user-header">
+                        <div class="user-avatar" id="user-avatar">U</div>
+                        <div class="user-info">
+                            <h3 id="user-full-email">user@example.com</h3>
+                            <p>注册时间: <span id="user-reg-time">2023-01-01</span></p>
+                            <p>最后登录: <span id="user-last-login">2023-11-15 14:30:22</span></p>
+                        </div>
+                    </div>
+                    
+                    <div class="user-stats">
+                        <div class="user-stat">
+                            <div class="user-stat-value" id="user-conv-count">0</div>
+                            <div class="user-stat-label">会话数量</div>
+                        </div>
+                        <div class="user-stat">
+                            <div class="user-stat-value" id="user-msg-count">0</div>
+                            <div class="user-stat-label">消息总数</div>
+                        </div>
+                        <div class="user-stat">
+                            <div class="user-stat-value" id="user-avg-msg">0</div>
+                            <div class="user-stat-label">平均消息/会话</div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-header">
+                        <h2>最近会话记录</h2>
+                    </div>
+                    
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>会话ID</th>
+                                <th>日期</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-conversations-table">
+                            <tr><td colspan="4" class="loading"><div class="loading-spinner"></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 管理员管理 -->
+            <div class="content-section" id="admins-section">
+                <div class="content-header">
+                    <h1>管理员管理</h1>
+                    <div class="breadcrumb">
+                        <a href="#" onclick="showSection('dashboard')">首页</a>
+                        <span>/</span>
+                        <span>管理员管理</span>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>管理员列表</h2>
+                        <div class="table-tools">
+                            <button class="btn" onclick="showAddAdminModal()">
+                                <i class="fas fa-plus"></i> 添加管理员
+                            </button>
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="admin-search" placeholder="搜索管理员...">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>用户名</th>
+                                <th>邮箱</th>
+                                <th>角色</th>
+                                <th>创建时间</th>
+                                <th>最近登录</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admins-table-body">
+                            <tr><td colspan="7" class="loading"><div class="loading-spinner"></div></td></tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="pagination" id="admins-pagination"></div>
+                </div>
+            </div>
+            
+            <!-- 操作日志 -->
+            <div class="content-section" id="admin-logs-section">
+                <div class="content-header">
+                    <h1>操作日志</h1>
+                    <div class="breadcrumb">
+                        <a href="#" onclick="showSection('dashboard')">首页</a>
+                        <span>/</span>
+                        <span>操作日志</span>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>操作日志记录</h2>
+                        <div class="table-tools">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="log-search" placeholder="搜索日志...">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>管理员</th>
+                                <th>操作</th>
+                                <th>目标</th>
+                                <th>详情</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-table-body">
+                            <tr><td colspan="6" class="loading"><div class="loading-spinner"></div></td></tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="pagination" id="logs-pagination"></div>
+                </div>
+            </div>
+        </div>
+        <!-- 新增会话详情区域 -->
+        <div class="content-section" id="conversation-detail-section">
+            <div class="content-header">
+                <h1>会话详情</h1>
+                <div class="breadcrumb">
+                    <a href="#" onclick="showSection('conversations')">会话管理</a>
+                    <span>/</span>
+                    <span>会话详情</span>
+                </div>
+            </div>
+            
+            <div class="user-detail-card">
+                <div class="user-header">
+                    <div class="user-info">
+                        <h3>会话ID: <span id="detail-conv-id"></span></h3>
+                        <p>用户: <span id="detail-user-email"></span></p>
+                        <p>创建时间: <span id="detail-created-at"></span></p>
+                        <p>消息总数: <span id="detail-message-count"></span></p>
+                    </div>
+                </div>
+                
+                <div class="table-header">
+                    <h2>消息列表</h2>
+                </div>
+                
+                <div class="message-list" id="conversation-messages">
+                    <!-- 消息将动态加载到这里 -->
+                </div>
+            </div>
+        </div>
+        <!-- 添加管理员模态框 -->
+        <div id="add-admin-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>添加新管理员</h3>
+                    <span class="close" onclick="closeModal('add-admin-modal')">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <form id="add-admin-form">
+                        <div class="form-group">
+                            <label>用户名</label>
+                            <input type="text" id="admin-username" required>
+                        </div>
+                        <div class="form-group">
+                            <label>密码</label>
+                            <input type="password" id="admin-password" required>
+                        </div>
+                        <div class="form-group">
+                            <label>确认密码</label>
+                            <input type="password" id="admin-password-confirm" required>
+                        </div>
+                        <div class="form-group">
+                            <label>邮箱</label>
+                            <input type="email" id="admin-email">
+                        </div>
+                        <div class="form-group">
+                            <label>角色</label>
+                            <select id="admin-role">
+                                <option value="admin">管理员</option>
+                                <option value="superadmin">超级管理员</option>
+                            </select>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-outline" onclick="closeModal('add-admin-modal')">取消</button>
+                            <button type="submit" class="btn">添加</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 编辑管理员模态框 -->
+        <div id="edit-admin-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>编辑管理员</h3>
+                    <span class="close" onclick="closeModal('edit-admin-modal')">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-admin-form">
+                        <input type="hidden" id="edit-admin-id">
+                        <div class="form-group">
+                            <label>用户名</label>
+                            <input type="text" id="edit-admin-username" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>邮箱</label>
+                            <input type="email" id="edit-admin-email">
+                        </div>
+                        <div class="form-group">
+                            <label>角色</label>
+                            <select id="edit-admin-role">
+                                <option value="admin">管理员</option>
+                                <option value="superadmin">超级管理员</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>重置密码</label>
+                            <input type="password" id="edit-admin-password" placeholder="留空则不修改">
+                        </div>
+                        <div class="form-group">
+                            <label>确认密码</label>
+                            <input type="password" id="edit-admin-password-confirm" placeholder="留空则不修改">
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-outline" onclick="closeModal('edit-admin-modal')">取消</button>
+                            <button type="submit" class="btn">保存</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='admin.js') }}"></script>
+</body>
+</html>
