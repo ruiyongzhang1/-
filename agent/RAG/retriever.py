@@ -126,7 +126,7 @@ def rag_search(query: str, top_k: int = 3) -> Dict[str, Any]:
     Returns:
         包含搜索结果和格式化上下文的字典
     """
-    print(f"🔍 RAG搜索: {query}")
+    # print(f"🔍 RAG搜索: {query}")
     
     # 搜索本地知识库
     results = search_local_knowledge(query, top_k=top_k)

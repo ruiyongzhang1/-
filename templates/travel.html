@@ -151,6 +151,25 @@
                     <option value="幽默诙谐">😄 幽默诙谐（轻松搞笑，网络用语）</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label class="form-label">🖼️ 图片生成设置：</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="generateImageCheckbox" checked>
+                        <span class="checkmark"></span>
+                        自动生成景点图片（AI创作，展现景点魅力）
+                    </label>
+                    <div class="image-info">
+                        <small>💡 开启后将为您生成高质量的景点视觉图片</small>
+                        <small style="display: block; margin-top: 4px; color: #666;">
+                            �️ 图片将直接显示在网页中，支持点击放大
+                        </small>
+                        <small style="display: block; margin-top: 2px; color: #888;">
+                            � 加载失败时自动提供原始图片链接
+                        </small>
+                    </div>
+                </div>
+            </div>
             <div class="modal-actions">
                 <button class="btn-secondary" onclick="closeAttractionGuideDialog()">取消</button>
                 <button class="btn-primary" onclick="startAttractionGuideFromModal()">开始讲解</button>
@@ -159,5 +178,224 @@
     </div>
 </div>
 <script src="{{ url_for('static', filename='travel.js') }}"></script>
+
+<!-- 图片加载优化 -->
+<style>
+/* 图片容器样式 */
+.image-container {
+    position: relative;
+    display: inline-block;
+    margin: 15px 0;
+    text-align: center;
+}
+
+.image-container img {
+    transition: opacity 0.3s ease, transform 0.2s ease;
+    cursor: pointer;
+}
+
+.image-container img:hover {
+    transform: scale(1.05);
+}
+
+/* 图片加载状态 */
+.image-loading {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* 图片错误状态 */
+.image-error {
+    border: 2px dashed #ccc;
+    background-color: #f9f9f9;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    text-align: center;
+}
+
+/* 图片链接样式 */
+.image-link {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 4px 8px;
+    background-color: #007bff;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: background-color 0.2s ease;
+}
+
+.image-link:hover {
+    background-color: #0056b3;
+    color: white;
+    text-decoration: none;
+}
+
+/* 图片模态框 */
+.image-modal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.8);
+    cursor: pointer;
+}
+
+.image-modal img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 90%;
+    max-height: 90%;
+    border-radius: 8px;
+}
+
+.image-modal .close {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    color: white;
+    font-size: 30px;
+    cursor: pointer;
+}
+</style>
+
+<script>
+// 图片加载优化
+document.addEventListener('DOMContentLoaded', function() {
+    // 监听消息内容变化，为新添加的图片添加优化
+    const chatBox = document.getElementById('chat-box');
+    
+    if (chatBox) {
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList') {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            optimizeImages(node);
+                        }
+                    });
+                }
+            });
+        });
+        
+        observer.observe(chatBox, {
+            childList: true,
+            subtree: true
+        });
+        
+        // 初始化已存在的图片
+        optimizeImages(chatBox);
+    }
+});
+
+function optimizeImages(container) {
+    const images = container.querySelectorAll('img');
+    
+    images.forEach(function(img) {
+        if (img.dataset.optimized) return; // 避免重复处理
+        
+        img.dataset.optimized = 'true';
+        
+        // 添加加载状态
+        img.classList.add('image-loading');
+        
+        // 图片加载成功
+        img.addEventListener('load', function() {
+            img.classList.remove('image-loading');
+            img.style.opacity = '1';
+            console.log('图片加载成功:', img.src);
+        });
+        
+        // 图片加载失败时的处理
+        img.addEventListener('error', function() {
+            img.classList.remove('image-loading');
+            console.log('图片加载失败:', img.src);
+            
+            // 如果有onerror属性，让它先执行
+            if (img.getAttribute('onerror') && !img.dataset.errorHandled) {
+                img.dataset.errorHandled = 'true';
+                return;
+            }
+            
+            // 创建错误提示
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'image-error';
+            errorDiv.innerHTML = `
+                <div>
+                    <p>📷 图片加载失败</p>
+                    <p style="font-size: 12px; margin-top: 5px;">网络可能受限，请点击下方链接查看</p>
+                </div>
+            `;
+            
+            // 替换图片
+            img.parentNode.replaceChild(errorDiv, img);
+        });
+        
+        // 添加点击放大功能
+        img.addEventListener('click', function() {
+            showImageModal(img.src, img.alt);
+        });
+        
+        // 为图片添加懒加载
+        if ('IntersectionObserver' in window) {
+            const imageObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        if (img.dataset.src) {
+                            img.src = img.dataset.src;
+                            img.removeAttribute('data-src');
+                        }
+                        observer.unobserve(img);
+                    }
+                });
+            });
+            
+            imageObserver.observe(img);
+        }
+    });
+}
+
+function showImageModal(src, alt) {
+    // 创建模态框
+    const modal = document.createElement('div');
+    modal.className = 'image-modal';
+    modal.innerHTML = `
+        <span class="close">&times;</span>
+        <img src="${src}" alt="${alt}">
+    `;
+    
+    document.body.appendChild(modal);
+    modal.style.display = 'block';
+    
+    // 关闭模态框
+    modal.addEventListener('click', function() {
+        document.body.removeChild(modal);
+    });
+    
+    modal.querySelector('.close').addEventListener('click', function() {
+        document.body.removeChild(modal);
+    });
+}
+</script>
 </body>
 </html>

@@ -1297,4 +1297,3 @@ function deleteAdmin(adminId, username) {
         });
     }
 }
-

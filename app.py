@@ -203,9 +203,12 @@ def attraction_guide():
     email = session["email"]
     conv_id = session.get("current_conv_id") or str(uuid.uuid4())
     session["current_conv_id"] = conv_id
+    
+    # 检查是否启用图片生成（默认启用）
+    generate_image = data.get("generate_image", True)
 
     try:
-        generator = get_attraction_guide_response_stream(user_message, email)
+        generator = get_attraction_guide_response_stream(user_message, email, generate_image)
         return stream_response(generator, user_message, email, conv_id, "attraction_guide")
     except Exception as e:
         return jsonify({"error": str(e)}), 500

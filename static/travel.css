@@ -685,123 +685,93 @@ body {
     border-color: #d1d5db;
 }
 
-
-
-
-
-
-/* 景点输入框特殊样式 */
-#attractionInput {
-    font-size: 15px;
-    padding: 16px 20px;
-    border-radius: 12px;
-    border: 2px solid #e5e7eb;
-    background: #f9fafb;
+/* 图片生成选项样式 */
+.checkbox-group {
+    margin-top: 8px;
 }
 
-#attractionInput:focus {
-    background: white;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-/* 讲解风格选择框样式 */
-#guideStyleSelect {
-    background: #f9fafb;
-    border: 2px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 16px 20px;
-    cursor: pointer;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
-    background-position: right 12px center;
-    background-repeat: no-repeat;
-    background-size: 16px;
-    padding-right: 40px;
-}
-
-#guideStyleSelect:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    background-color: white;
-}
-
-#guideStyleSelect:hover {
-    border-color: #d1d5db;
-    background-color: white;
-}
-
-.modal-actions {
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
-    margin-top: 30px;
-    padding-top: 20px;
-    border-top: 1px solid #e5e7eb;
-}
-
-.btn-primary, .btn-secondary {
-    padding: 12px 24px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    border: none;
+.checkbox-label {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-width: 100px;
-    justify-content: center;
+    cursor: pointer;
+    padding: 12px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    background: #f8fafc;
+    user-select: none;
 }
 
-.btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+.checkbox-label:hover {
+    border-color: #3b82f6;
+    background: #eff6ff;
 }
 
-.btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+.checkbox-label input[type="checkbox"] {
+    margin-right: 12px;
+    width: 18px;
+    height: 18px;
+    accent-color: #3b82f6;
+    cursor: pointer;
 }
 
-.btn-secondary {
-    background: #f3f4f6;
-    color: #374151;
-    border: 1px solid #d1d5db;
+.checkbox-label input[type="checkbox"]:checked + .checkmark {
+    background: #3b82f6;
 }
 
-.btn-secondary:hover {
-    background: #e5e7eb;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+.image-info {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: #fef3cd;
+    border-radius: 6px;
+    border-left: 4px solid #f59e0b;
 }
 
-/* 模态框动画 */
-@keyframes modalFadeIn {
-    from {
-        opacity: 0;
-        transform: scale(0.9) translateY(20px);
+.image-info small {
+    color: #92400e;
+    font-size: 13px;
+    line-height: 1.4;
+    display: block;
+}
+
+/* 图片显示样式优化 */
+.message-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    margin: 12px 0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.message-content img:hover {
+    transform: scale(1.02);
+    cursor: zoom-in;
+}
+
+/* 图片信息显示样式 */
+.message-content p:has(+ ul) {
+    font-style: italic;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+/* 响应式图片处理 */
+@media (max-width: 768px) {
+    .message-content img {
+        margin: 8px 0;
     }
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
+    
+    .checkbox-label {
+        padding: 10px;
+        font-size: 14px;
+    }
+    
+    .image-info small {
+        font-size: 12px;
     }
 }
 
-@keyframes modalFadeOut {
-    from {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
-    to {
-        opacity: 0;
-        transform: scale(0.9) translateY(20px);
-    }
-}
-
-/* 响应式设计 */
 @media (max-width: 768px) {
     .travel-layout {
         flex-direction: column;

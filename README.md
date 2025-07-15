@@ -11,9 +11,19 @@
 
 ### 🤖 多智能体系统
 - **通用AI助手** (`NormalAgent`): 处理日常问答和通用任务
+
 - **旅行规划师** (`PlannerAgent`): 专业的旅行方案制定
+
 - **景点向导** (`AttractionGuide`): 详细的景点介绍和推荐
+
 - **PDF生成器** (`PdfAgent`): 智能文档生成和格式化
+
+### 📚 RAG增强搜索
+
+- **知识库检索**：基于向量数据库的语义搜索，由大量PDF文件提取得到
+- **精准问答**：结合检索结果和大型语言模型，提供基于上下文的准确回答
+- **多源数据融合**：无缝整合结构化数据库和非结构化文本信息
+- **可解释性**：回答时提供参考来源，增强可信度
 
 ### 🧠 Redis记忆系统
 - **持久化记忆**: 基于Redis的对话上下文存储 (7天TTL)
@@ -43,13 +53,15 @@
 
 ### 安装步骤
 
-1. **克隆项目**
+#### 1. 克隆项目
+
 ```bash
 git clone <repository-url>
 cd QL_guide
 ```
 
-2. **创建虚拟环境**
+#### 2. 创建虚拟环境
+
 ```bash
 python -m venv .venv
 
@@ -60,91 +72,169 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-3. **安装依赖**
+#### 3. 安装依赖
+
+##### 安装python库
+
 ```bash
 pip install langchain-mcp-adapters langgraph "langchain[openai]"
 pip install -r requirements.txt
 ```
 ---
-📄 安装说明：wkhtmltopdf 与 Redis
-本项目依赖以下外部工具：
-- [x] `wkhtmltopdf`：用于将 HTML 转换为 PDF（例如导出聊天记录、旅行行程）
-- [x] `Redis`：用于缓存和任务队列（如聊天上下文、任务状态等）
+##### 安装外部工具
 
-📥 一、安装 wkhtmltopdf
+一、安装 wkhtmltopdf
 
-✅ 1. 下载地址
+1. 下载地址
 
 [👉 点击下载 wkhtmltopdf Windows 版（官方）](https://wkhtmltopdf.org/downloads.html)
+
 > 建议下载 Windows 64-bit 版本（带 `msvc` 后缀），例如：  
 > `wkhtmltox-0.12.6-1.msvc2015-win64.exe`
 
-✅ 2. 安装步骤
-1. 双击安装程序，安装到目录：`C:\Program Files\wkhtmltopdf`
-2. 安装完成后，将以下路径加入系统环境变量（PATH）：
-   ```
-   C:\Program Files\wkhtmltopdf\bin
-   ```
-   
-✅ 3. 验证是否安装成功
+2. 安装步骤
 
+1） 双击安装程序，安装到目录：`C:\Program Files\wkhtmltopdf`
+
+2） 安装完成后，将以下路径加入系统环境变量（PATH）：
+
+```
+C:\Program Files\wkhtmltopdf\bin
+```
+
+ 3） 验证是否安装成功
 在 PowerShell 或 CMD 中运行：
-```bash
+
+```
 wkhtmltopdf -V
 ```
-输出类似版本信息即表示安装成功。
----
 
-🧠 二、安装 Redis（Windows）
+输出类似版本信息即表示安装成功。
+
+二、安装 Redis（Windows）
 
 Redis 官方未提供 Windows 原生版本，但可通过以下方式安装：
 
 使用 Redis for Windows 非官方构建（微软维护过）
-- 下载地址（Releases）：  
-  [https://github.com/microsoftarchive/redis/releases](https://github.com/microsoftarchive/redis/releases)
-- 推荐版本：`Redis-x64-3.2.100.msi`
+1. 下载地址
+
+   [https://github.com/microsoftarchive/redis/releases](https://github.com/microsoftarchive/redis/releases)
+
+推荐版本：`Redis-x64-3.2.100.msi`
+
+2. 安装步骤
+
+   按照 Redis 安装器引导进行安装
+
+3. 启动方式
+
 安装完成后可以通过：
+
 ```bash
 redis-server
 ```
 来启动 Redis 服务。
----
 
-4. **配置环境变量**
+三、安装 MySQL for Windows
+
+1. 下载安装包
+
+   [MySQL 官方下载页面](https://dev.mysql.com/downloads/installer/)，选择适合 Windows 系统的 MySQL Installer 进行下载。
+
+2. 运行安装程序
+
+   双击下载的安装包，按照安装向导的提示进行操作。在选择安装类型时，建议选择 "Developer Default"，这样会安装 MySQL Server、MySQL Workbench 等常用组件。
+
+3. 配置 MySQL Server
+
+   在安装过程中，会提示设置 root 用户的密码，务必牢记该密码。其他配置项可以使用默认设置。
+
+4. 完成安装
+
+   等待安装完成后，MySQL Server 会自动启动。
+
+四、安装 MySQL Workbench
+
+如果在安装 MySQL 时选择了 "Developer Default" 安装类型，MySQL Workbench 已经安装完成。如果需要单独安装，可以访问 [MySQL Workbench 官方下载页面](https://dev.mysql.com/downloads/workbench/)，选择适合 Windows 系统的安装包进行下载和安装。
+
+##### 配置环境变量
+
 创建 `.env` 文件：
+
 ```env
-# Flask配置
-FLASK_SECRET_KEY=your_secret_key_here
-
-# OpenAI API配置
-OPENAI_API_KEY=your_openai_api_key
-OPENAI_API_URL=https://api.openai.com/v1
-
 # 搜索API配置
-SEARCHAPI_API_KEY=your_searchapi_key
+SEARCHAPI_API_KEY=your_search_api_key_here
 
-# Redis配置（可选）
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
+#DeepSeek
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+DEEPSEEK_API_URL=https://api.deepseek.com/v1
+
+# OpenAI 代理
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_API_URL=https://api.openai-proxy.org/v1
+OPENAI_API_BASE=https://api.openai-proxy.org/v1
+
+# redis 配置
+REDIS_PASSWORD=your_redis_password_here
+REDIS_URL=redis://localhost:6379
+
+# Flask 配置
+FLASK_SECRET_KEY=your_flask_secret_key_here
+
+# 高德地图 API 密钥
+GAODE_API_KEY=your_gaode_api_key_here
+
+# RAG 增强搜索配置
+DOC_DIR=./agent/RAG/pdf
+VECTOR_DIR=./agent/RAG/knowledge1.demo
+COLLECTION_NAME=travel_information
+EMBED_MODEL=text-embedding-ada-002
+
+# 数据库配置
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=123456
+DB_NAME=scenic_spots_db
+
+# 部分系统常数
+SIMILARITY_THRESHOLD=0.7  
+NEARBY_DISTANCE=5.0  
 ```
 
-5. **初始化数据库** ⚠️ 重要步骤！
+#### 5. 初始化数据库 ⚠️ 重要步骤！
+
 ```bash
 python database_self.py
 ```
 
-6. **启动Redis服务器**（推荐）
+#### 6. 启动Redis服务器（推荐）
+
 ```bash
 python start_redis.py
 ```
 
-7. **运行应用**
+#### 7. 导入 MySQL
+
+```bash
+# 登录 MySQL（需输入密码）
+mysql -u root -p
+
+# 创建数据库（若不存在）
+CREATE DATABASE scenic_spots_db
+
+# 导入sql文件
+mysql -u root -p scenic_spots_db < your_load_position/QL_guide/agent/sql/mysql/scenic_spots_db_cities.db
+mysql -u root -p scenic_spots_db < your_load_position/QL_guide/agent/sql/mysql/scenic_spots_db_provinces.sql
+mysql -u root -p scenic_spots_db < your_load_position/QL_guide/agent/sql/mysql/scenic_spots_db_scenic_spots.sql
+```
+
+#### 8. 运行应用
+
 ```bash
 python app.py
 ```
 
-8. **访问应用**
+#### 9. 访问应用
 打开浏览器访问: `http://localhost:5000`
 
 ## 📁 项目架构
@@ -165,7 +255,9 @@ QL_guide/
 │   ├── pdf_generator.py          # PDF生成智能体
 │   ├── attraction_guide.py       # 景点向导智能体
 │   ├── prompts.py               # 智能体提示词模板
-│   └── mcp_server.py            # MCP协议服务器
+│   ├── mcp_server.py            # MCP协议服务器
+│   ├── RAG/                      # RAG相关模块
+│   ├── sql/                      # SQL相关模块
 │
 ├── 🎨 templates/                  # HTML模板文件
 │   ├── index.html               # 首页

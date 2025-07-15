@@ -6,8 +6,7 @@ import traceback
 import concurrent.futures
 from typing import Dict, Any, List, Optional, Generator
 from agent.RAG.retriever import rag_search
-from agent.sql.attraction_ezqa_service import qa_service
-
+from agent.sql.attraction_ezqa_service import myanswer
 
 # 抑制LangChain弃用警告
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -331,7 +330,7 @@ class InformationCollectorAgent:
         if not self.agent:
             return f"信息收集智能体不可用（工具加载失败），无法处理请求: {user_request}"
         
-        print(f"\n🔍 [MCP调试] 开始信息收集，用户请求: {user_request}")
+        # print(f"\n🔍 [MCP调试] 开始信息收集，用户请求: {user_request}")
         print(f"🔧 [MCP调试] 可用工具数量: {len(self.tools)}")
         
         collector_request = f"{INFORMATION_COLLECTOR_PROMPT}\n用户需求:{user_request}"
@@ -348,7 +347,7 @@ class InformationCollectorAgent:
             response_content = ResponseExtractor.extract_agent_response(response)
             
             print(f"✅ [MCP调试] 信息收集完成，响应长度: {len(response_content)} 字符")
-            print(f"📊 [MCP调试] 响应内容预览: {response_content[:200]}...")
+            # print(f"📊 [MCP调试] 响应内容预览: {response_content[:200]}...")
             
             return response_content
             
@@ -418,8 +417,10 @@ class PdfAgent:
             return "暂无对话历史记录，无法生成PDF报告。"
         
         conversation_text = self._format_conversation_history(conversation_history)
+        # summary = self._generate_conversation_summary(conversation_text, user_request)
         detailed_guide = self._generate_travel_guide(conversation_text, user_request)
         full_content = f"# 旅行对话记录\n\n{conversation_text}\n\n---\n\n# 详细旅游攻略\n\n{detailed_guide}"
+        # pdf_result = self.pdf_generator.generate_travel_pdf(conversation_data=full_content, summary=summary, user_info="user") # user_info can be enhanced
         pdf_result = self.pdf_generator.generate_travel_pdf(conversation_data=full_content, summary=detailed_guide, user_info="user") # user_info can be enhanced
         return f"📄{pdf_result}"
     
@@ -545,22 +546,30 @@ class AgentService:
 
             if agent_type == "general":
                 agent = session['normal_agent']
-                answer = qa_service.get_answer(user_message)
-                sql_message = user_message + f"本地查找到资料信息：{answer}"
+                answer = myanswer(user_message)
+                if answer == '':
+                    print(f"🔍 [SQL查询] 未找到相关信息，使用普通对话智能体处理。")
+                    generator = agent.get_response_stream(user_message, conversation_history)
+                else:
+                    sql_message = user_message + f"本地查找到资料信息：{answer}"
+                    print(f"🔍 [SQL查询] 找到相关信息，使用SQL智能体处理。")
+                    generator = agent.get_response_stream(sql_message, conversation_history)
                 # print(sql_message)
-                generator = agent.get_response_stream(sql_message, conversation_history)
             
             elif agent_type == "travel":
                 if is_travel_planning_request(user_message):
                     # Multi-agent workflow with memory
                     collector_agent = session['collector']
                     planner_agent = session['planner']
-                    
+
+                    '''
                     print(f"\n🎯 [旅行规划] 检测到旅行规划请求: {user_message}")
                     print(f"🔧 [旅行规划] 信息收集智能体工具数量: {len(collector_agent.tools)}")
                     print(f"📅 [旅行规划] 开始信息收集阶段...")
                     
                     print("旅行规划流程: [1] 信息收集中...")
+                    '''
+
                     # 直接使用同步方式调用信息收集
                     collected_info = collector_agent.get_response_stream(user_message)
                     # 收集完整响应
@@ -569,7 +578,7 @@ class AgentService:
                         collected_info_text += chunk
                     
                     print(f"📊 [旅行规划] 信息收集完成，收集到的信息长度: {len(collected_info_text)} 字符")
-                    print(f"📋 [旅行规划] 收集到的信息预览: {collected_info_text[:300]}...")
+                    # print(f"📋 [旅行规划] 收集到的信息预览: {collected_info_text[:300]}...")
                     print("旅行规划流程: [2] 开始流式行程规划...")
                     generator = planner_agent.get_response_stream(user_message, collected_info, conversation_history)
                 else:

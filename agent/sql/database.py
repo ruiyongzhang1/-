@@ -1,259 +1,208 @@
-import mysql.connector
-from mysql.connector import Error
-import logging
+import pymysql
+import math
 
 class DatabaseManager:
-    def __init__(self, host, user, password, database):
+    def __init__(self, host, user, password, auth_plugin, database):
         self.host = host
         self.user = user
         self.password = password
         self.database = database
         self.connection = None
+        self._connect()
 
-    def connect(self):
+    def _connect(self):
         """建立数据库连接"""
         try:
-            if not self.connection or not self.connection.is_connected():
-                self.connection = mysql.connector.connect(
-                    host=self.host,
-                    user=self.user,
-                    password=self.password,
-                    database=self.database,
-                    use_pure=True
-                )
-                return True
-        except Error as e:
-            logging.error(f"数据库连接失败: {e}")
-            return False
-        return True
-
-    def disconnect(self):
-        """关闭数据库连接"""
-        if self.connection and self.connection.is_connected():
-            self.connection.close()
-
-    def query(self, processed_question):
-        """根据处理后的问题查询数据库"""
-        if not processed_question or not isinstance(processed_question, dict):
-            logging.error("无效的查询参数")
-            return []
-        
-        query_type = processed_question.get("type")
-        
-        # 1. 附近景点查询
-        if query_type == "nearby":
-            lat = processed_question.get("latitude")
-            lon = processed_question.get("longitude")
-            name = processed_question.get("name")
-            radius = processed_question.get("radius", 5.0)
-            
-            query = """
-                SELECT 
-                    s.name, 
-                    s.type, 
-                    s.address, 
-                    s.longitude, 
-                    s.latitude,
-                    s.rating,
-                    s.cost,
-                    (6371 * acos(cos(radians(%s)) * cos(radians(s.latitude)) * 
-                    cos(radians(s.longitude) - radians(%s)) + 
-                    sin(radians(%s)) * sin(radians(s.latitude)))) AS distance
-                FROM scenic_spots s
-                WHERE s.name != %s
-                HAVING distance <= %s
-                ORDER BY distance ASC
-                LIMIT 10;
-            """
-            params = (lat, lon, lat, name, radius)
-            return self._execute_query(query, params)
-        
-        # 2. 营业时间查询
-        elif query_type == "open_time":
-            name = processed_question.get("name")
-            query = """
-                SELECT name, open_time_start, open_time_end, opentime_today, opentime_week
-                FROM scenic_spots
-                WHERE name = %s
-            """
-            return self._execute_query(query, (name,))
-        
-        # 3. 门票价格查询
-        elif query_type == "ticket_price":
-            name = processed_question.get("name")
-            query = """
-                SELECT name, cost
-                FROM scenic_spots
-                WHERE name = %s
-            """
-            return self._execute_query(query, (name,))
-        
-        # 4. 城市景点查询
-        elif query_type == "city_spots":
-            city_name = processed_question.get("city_name")
-            query = """
-                SELECT 
-                    s.name AS name,           -- 显式指定别名
-                    s.type AS type,           -- 显式指定别名
-                    s.rating AS rating,       -- 显式指定别名
-                    s.address AS address,     -- 显式指定别名
-                    c.name AS city_name,      -- 显式指定别名
-                    p.name AS province_name   -- 显式指定别名
-                FROM scenic_spots s
-                JOIN cities c ON s.city_id = c.id
-                JOIN provinces p ON c.province_id = p.id
-                WHERE c.name LIKE %s
-                ORDER BY s.rating DESC
-                LIMIT 5;
-            """
-            return self._execute_query(query, (f"%{city_name}%",))
-        
-        # 5. 评分查询
-        elif query_type == "rating":
-            name = processed_question.get("name")
-            query = """
-                SELECT name, rating
-                FROM scenic_spots
-                WHERE name = %s
-            """
-            return self._execute_query(query, (name,))
-        
-        # 6. 位置查询
-        elif query_type == "location":
-            name = processed_question.get("name")
-            query = """
-                SELECT 
-                    s.name, 
-                    s.address,
-                    c.name AS city_name,
-                    p.name AS province_name
-                FROM scenic_spots s
-                JOIN cities c ON s.city_id = c.id
-                JOIN provinces p ON c.province_id = p.id
-                WHERE s.name = %s
-            """
-            return self._execute_query(query, (name,))
-        
-    # 8. 联系方式查询
-        elif query_type == "contact":
-            name = processed_question.get("name")
-            query = """
-                SELECT name, tel
-                FROM scenic_spots
-                WHERE name = %s
-            """
-            return self._execute_query(query, (name,))
-        
-        # 9. 城市查询
-        elif query_type == "city":
-            name = processed_question.get("name")
-            query = """
-                SELECT 
-                    s.name, 
-                    c.name AS city_name
-                FROM scenic_spots s
-                JOIN cities c ON s.city_id = c.id
-                WHERE s.name = %s
-            """
-            return self._execute_query(query, (name,))
-        
-        # 10. 省份查询
-        elif query_type == "province":
-            name = processed_question.get("name")
-            query = """
-                SELECT 
-                    s.name, 
-                    p.name AS province_name
-                FROM scenic_spots s
-                JOIN cities c ON s.city_id = c.id
-                JOIN provinces p ON c.province_id = p.id
-                WHERE s.name = %s
-            """
-            return self._execute_query(query, (name,))
-
-        # 其他类型查询
-        return []
+            self.connection = pymysql.connect(
+                host=self.host,
+                user=self.user,
+                password=self.password,
+                database=self.database,
+                cursorclass=pymysql.cursors.DictCursor
+            )
+        except Exception as e:
+            raise
 
     def _execute_query(self, query, params=None):
-        """执行SQL查询并处理结果"""
-        if not self.connect():
-            return []
-        
+        """执行SQL查询并返回结果"""
+        if not self.connection:
+            self._connect()
+            
         try:
-            cursor = self.connection.cursor(dictionary=True)
-            '''print(f"执行SQL: {query}")
-            print(f"参数: {params}")'''
-            cursor.execute(query, params or ())
-            results = cursor.fetchall()
-            
-            # 处理经纬度为浮点数
-            for row in results:
-                if 'latitude' in row and row['latitude'] is not None:
-                    row['latitude'] = float(row['latitude'])
-                if 'longitude' in row and row['longitude'] is not None:
-                    row['longitude'] = float(row['longitude'])
-                if 'rating' in row and row['rating'] is not None:
-                    row['rating'] = float(row['rating'])
-                if 'cost' in row and row['cost'] is not None:
-                    row['cost'] = float(row['cost'])
-            
-            '''if results:
-                print(f"结果数量: {len(results)}")
-                print(f"第一条记录结构: {list(results[0].keys())}")
-                print(f"第一条记录内容: {results[0]}")
-            else:
-                print("查询结果为空")'''
-            
-            return results
-        except Error as e:
-            logging.error(f"查询数据库失败: {e}")
+            with self.connection.cursor() as cursor:
+                cursor.execute(query, params)
+                results = cursor.fetchall()
+                return results
+        except Exception:
             return []
-        finally:
-            self.disconnect()
 
-    def get_all_spot_names(self):
-        """获取所有景点名称，用于构建词典"""
-        if not self.connect():
-            return []
-        
-        try:
-            cursor = self.connection.cursor(dictionary=True)
-            query = "SELECT name FROM scenic_spots"
-            cursor.execute(query)
-            return [row["name"] for row in cursor.fetchall()]
-        except Error as e:
-            logging.error(f"获取景点名称失败: {e}")
-            return []
-        finally:
-            self.disconnect()
+    def _get_common_query(self):
+        """返回通用的景点查询SQL语句"""
+        return """
+            SELECT
+                s.name AS name,
+                s.type AS type,
+                s.rating AS rating,
+                s.address AS address,
+                s.cost AS cost,
+                s.open_time_start AS open_time_start,
+                s.open_time_end AS open_time_end,
+                s.opentime_today AS opentime_today,
+                s.opentime_week AS opentime_week,
+                s.tel AS tel,
+                c.name AS city_name,
+                p.name AS province_name
+            FROM scenic_spots s
+            JOIN cities c ON s.city_id = c.id
+            JOIN provinces p ON c.province_id = p.id
+        """
 
-    def get_spot_coordinates(self, name):
-        """查询景点的经纬度信息"""
-        if not self.connect():
-            return None
+    def query(self, processed_questions):
+        """执行查询并返回结果"""
+        results = []
         
-        try:
-            cursor = self.connection.cursor(dictionary=True)
-            query = """
-                SELECT 
-                    name, 
-                    latitude, 
-                    longitude,
-                    city_id
-                FROM scenic_spots 
-                WHERE name = %s
-            """
-            cursor.execute(query, (name,))
-            result = cursor.fetchone()
+        for question in processed_questions:
+            query_type = question.get("type")
             
-            if result:
-                # 确保经纬度转换为浮点数
-                result['latitude'] = float(result['latitude'])
-                result['longitude'] = float(result['longitude'])
+            if query_type == "city_spots":
+                city_name = question.get("city_name")
+                if city_name:
+                    query = self._get_common_query() + " WHERE c.name = %s"
+                    city_results = self._execute_query(query, (city_name,))
+                    results.extend(city_results)
+                    
+            elif query_type == "compound_filter":
+                keywords = question.get("keywords", [])
+                compound_results = self._execute_compound_filter(keywords)
+                results.extend(compound_results)
+                
+            elif query_type == "spot_info":
+                spot_name = question.get("spot_name")
+                attributes = question.get("attributes", [])
+                # 构建景点信息查询
+                columns = []
+                if "评分" in attributes:
+                    columns.append("s.rating")
+                if "位置" in attributes:
+                    columns.append("s.address")
+                if "电话" in attributes:
+                    columns.append("s.tel")
+                if "营业时间" in attributes:
+                    columns.extend(["s.open_time_start", "s.open_time_end", "s.opentime_today", "s.opentime_week"])
+                if "所在城市" in attributes:
+                    columns.append("c.name")
+                if not columns:
+                    columns = ["s.name", "s.rating", "s.address", "s.tel", "s.open_time_start", "s.open_time_end", "s.opentime_today", "s.opentime_week", "c.name"]
+                column_str = ", ".join(columns)
+                query = f"SELECT {column_str} FROM scenic_spots s JOIN cities c ON s.city_id = c.id WHERE s.name = %s"
+                spot_results = self._execute_query(query, (spot_name,))
+                results.extend(spot_results)
             
-            return result
-        except Error as e:
-            logging.error(f"查询经纬度失败: {e}")
-            return None
-        finally:
-            self.disconnect()
+            elif query_type == "nearby_spots":
+                spot_name = question.get("spot_name")
+                nearby_results = self._execute_nearby_spots_query(spot_name)
+                results.extend(nearby_results)
+        
+        return results
+
+    def _execute_nearby_spots_query(self, spot_name):
+        """执行附近景点查询，基于经纬度计算距离"""
+        # 首先查询目标景点的经纬度
+        query = "SELECT longitude, latitude FROM scenic_spots WHERE name = %s"
+        result = self._execute_query(query, (spot_name,))
+        
+        if not result:
+            return []
+            
+        target_longitude = result[0]['longitude']
+        target_latitude = result[0]['latitude']
+        
+        # 使用Haversine公式计算距离
+        # 注意：不同数据库系统对三角函数的支持可能不同，这里使用MySQL的函数
+        distance_query = f"""
+            SELECT
+                s.name AS name,
+                s.type AS type,
+                s.rating AS rating,
+                s.address AS address,
+                s.cost AS cost,
+                s.open_time_start AS open_time_start,
+                s.open_time_end AS open_time_end,
+                s.opentime_today AS opentime_today,
+                s.opentime_week AS opentime_week,
+                s.tel AS tel,
+                c.name AS city_name,
+                p.name AS province_name,
+                -- Haversine公式计算距离（单位：公里）
+                6371 * 2 * ASIN(SQRT(
+                    POWER(SIN((s.latitude - {target_latitude}) * PI()/180 / 2), 2) +
+                    COS(s.latitude * PI()/180) * COS({target_latitude} * PI()/180) *
+                    POWER(SIN((s.longitude - {target_longitude}) * PI()/180 / 2), 2)
+                )) AS distance
+            FROM scenic_spots s
+            JOIN cities c ON s.city_id = c.id
+            JOIN provinces p ON c.province_id = p.id
+            WHERE s.name != %s
+            ORDER BY distance ASC, s.rating DESC
+            LIMIT 5
+        """
+        
+        return self._execute_query(distance_query, (spot_name,))
+
+    def _execute_compound_filter(self, keywords):
+        """执行复合条件查询，合并所有条件到一个SQL查询中"""
+        if not keywords:
+            return []
+            
+        # 构建SQL查询条件和参数
+        conditions = []
+        params = []
+        
+        for keyword in keywords:
+            query_type = keyword.get("type")
+            
+            if query_type == "city_spots":
+                city_name = keyword.get("city_name")
+                if city_name:
+                    conditions.append("c.name = %s")
+                    params.append(city_name)
+                    
+            elif query_type == "ticket_price":
+                price_info = keyword.get("price")
+                if price_info:
+                    operator = price_info.get("operator", "<=")
+                    value = price_info.get("value")
+                    conditions.append(f"s.cost {operator} %s")
+                    params.append(value)
+                    
+            elif query_type == "rating_spots":
+                rating_info = keyword.get("rating")
+                if rating_info:
+                    operator = rating_info.get("operator", ">=")
+                    value = rating_info.get("value")
+                    conditions.append(f"s.rating {operator} %s")
+                    params.append(value)
+        
+        # 构建完整SQL查询
+        base_query = self._get_common_query()
+        
+        if conditions:
+            where_clause = " AND ".join(conditions)
+            full_query = f"{base_query} WHERE {where_clause}"
+        else:
+            full_query = base_query
+        
+        # 执行单个查询
+        return self._execute_query(full_query, tuple(params))
+
+    def get_all_cities(self):
+        """获取所有城市名称"""
+        query = "SELECT name FROM cities"
+        results = self._execute_query(query)
+        return [row["name"] for row in results]
+
+    def get_all_spots(self):
+        """获取所有景点名称"""
+        query = "SELECT name FROM scenic_spots"
+        results = self._execute_query(query)
+        return [row["name"] for row in results]

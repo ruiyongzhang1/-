@@ -1,138 +1,200 @@
 class ResponseGenerator:
+    def __init__(self):
+        pass
 
-    UNABLE_TO_ANSWER = "抱歉，暂时无法回答这个问题。"
-    def generate(self, processed_question, db_results):
-        """根据处理后的问题和数据库结果生成用户响应"""
-        query_type = processed_question.get("type")
-        message = processed_question.get("message")
-
+    def generate(self, processed_questions, db_results):
+        """生成用户问题的回答"""
         if not db_results:
-            return self.UNABLE_TO_ANSWER
+            return ""
+        
+        # 检查问题类型
+        question_types = [q["type"] for q in processed_questions]
+        
+        # 优先处理景点信息查询
+        if "spot_info" in question_types:
+            return self._generate_spot_info_response(processed_questions, db_results)
+            
+        # 处理城市景点查询或复合查询
+        elif "city_spots" in question_types or "compound_filter" in question_types:
+            return self._generate_city_spots_response(processed_questions, db_results)
+        
+        # 处理附近景点推荐查询
+        elif "nearby_spots" in question_types:
+            return self._generate_nearby_spots_response(processed_questions, db_results)
+        
+        # 通用响应
+        return self._generate_generic_response(processed_questions, db_results)
 
-        # 1. 附近景点查询
-        if query_type == "nearby":
-            spot_name = processed_question.get("name")
-            radius = processed_question.get("radius", 5.0)
-            response = f"{spot_name}附近{radius}公里内的景点有：\n"
-
-            for i, spot in enumerate(db_results, 1):
-                distance = round(spot['distance'], 2)
-                rating = spot['rating'] or "暂无评分"
-                response += f"{i}. {spot['name']}（{spot['type']}，距离{distance}公里，评分{rating}）\n"
-
-            return response
-
-        # 2. 营业时间查询
-        elif query_type == "open_time":
-            spot = db_results[0]
-            name = spot['name']
-
-            if spot['opentime_today']:
-                return f"{name}今日营业时间：{spot['opentime_today']}"
-
-            if spot['opentime_week']:
-                return f"{name}的营业时间：{spot['opentime_week']}"
-
-            if spot['open_time_start'] and spot['open_time_end']:
-                start_time = str(spot['open_time_start'])
-                end_time = str(spot['open_time_end'])
-                return f"{name}的营业时间为每天{start_time}至{end_time}。"
-
-            return self.UNABLE_TO_ANSWER
-
-        # 3. 门票价格查询
-        elif query_type == "ticket_price":
-            spot = db_results[0]
-            name = spot['name']
+    def _generate_city_spots_response(self, processed_questions, db_results):
+        """生成城市景点查询的响应，包含营业时间和电话信息"""
+        # 尝试提取城市名称
+        city_name = None
+        for question in processed_questions:
+            if question["type"] == "city_spots":
+                city_name = question.get("city_name")
+                break
+            elif question["type"] == "compound_filter":
+                for keyword in question.get("keywords", []):
+                    if keyword["type"] == "city_spots":
+                        city_name = keyword.get("city_name")
+                        break
+                if city_name:
+                    break
+        
+        # 构建响应
+        response = f"{city_name} 的推荐景点有：\n"
+        for i, spot in enumerate(db_results[:10], 1):  # 只显示前10个景点
+            # 处理价格信息，直接显示"缺失"
             cost = spot['cost']
-
+            price = "缺失"
             if cost is not None:
-                return f"{name}的门票价格为{cost}元。"
-            else:
-                return self.UNABLE_TO_ANSWER
+                price = f"{cost}元" if cost > 0 else "免费"
+            
+            response += f"{i}. {spot['name']}（评分：{spot['rating']}，价格：{price}）\n"
+            response += f"   类型：{spot['type']}\n"
+            response += f"   地址：{spot['address']}\n"
+            
+            # 添加营业时间信息
+            if spot['opentime_today']:
+                response += f"   营业时间：{spot['opentime_today']}\n"
+            elif spot['open_time_start'] and spot['open_time_end']:
+                # 从timedelta对象转换为HH:MM格式
+                start_time = self._format_time(spot['open_time_start'])
+                end_time = self._format_time(spot['open_time_end'])
+                response += f"   营业时间：{start_time}-{end_time}\n"
+            
+            # 添加电话信息（格式化电话号码）
+            if spot['tel']:
+                # 简单格式化，实际可能需要更复杂的处理
+                tel = self._format_phone(spot['tel'])
+                response += f"   电话：{tel}\n"
+        
+        return response
 
-        # 4. 城市景点查询
-        elif query_type == "city_spots":
-            city_name = processed_question.get("city_name")
+    def _generate_spot_info_response(self, processed_questions, db_results):
+        """生成景点信息查询的响应"""
+        spot_name = None
+        attributes = []
+        for question in processed_questions:
+            if question["type"] == "spot_info":
+                spot_name = question.get("spot_name")
+                attributes = question.get("attributes", [])
+                break
 
-            # 调试输出
-            '''print(f"生成城市景点响应，结果数量: {len(db_results)}")
-            if db_results and len(db_results) > 0:
-                print(f"第一条结果字段: {list(db_results[0].keys())}")'''
+        response = f"{spot_name} 的相关信息如下：\n"
+        for result in db_results:
+            if "评分" in attributes and 'rating' in result:
+                response += f"评分：{result['rating']}\n"
+            if "位置" in attributes and 'address' in result:
+                response += f"位置：{result['address']}\n"
+            if "电话" in attributes and 'tel' in result:
+                tel = self._format_phone(result['tel'])
+                response += f"电话：{tel}\n"
+            if "营业时间" in attributes:
+                if 'opentime_today' in result and result['opentime_today']:
+                    response += f"营业时间：{result['opentime_today']}\n"
+                elif 'open_time_start' in result and 'open_time_end' in result and result['open_time_start'] and result['open_time_end']:
+                    start_time = self._format_time(result['open_time_start'])
+                    end_time = self._format_time(result['open_time_end'])
+                    response += f"营业时间：{start_time}-{end_time}\n"
+            if "所在城市" in attributes and 'name' in result:
+                response += f"所在城市：{result['name']}\n"
+        return response
 
-            if not db_results:
-                return self.UNABLE_TO_ANSWER
+    def _generate_nearby_spots_response(self, processed_questions, db_results):
+        """生成附近景点推荐查询的响应，包含距离信息"""
+        spot_name = None
+        for question in processed_questions:
+            if question["type"] == "nearby_spots":
+                spot_name = question.get("spot_name")
+                break
 
-            # 检查结果是否包含城市和省份信息
-            has_location_info = all(
-                key in db_results[0] for key in ['city_name', 'province_name']
-            )
+        response = f"{spot_name} 附近评分最高的5个景点有：\n"
+        for i, spot in enumerate(db_results[:5], 1):  # 只显示前5个景点
+            # 处理价格信息，直接显示"缺失"
+            cost = spot['cost']
+            price = "缺失"
+            if cost is not None:
+                price = f"{cost}元" if cost > 0 else "免费"
+            
+            # 处理距离信息
+            distance = spot.get('distance', None)
+            distance_str = "距离未知"
+            if distance is not None:
+                if distance < 1:
+                    distance_str = f"{int(distance * 1000)}米"
+                else:
+                    distance_str = f"{distance:.1f}公里"
+            
+            response += f"{i}. {spot['name']}（评分：{spot['rating']}，价格：{price}，距离：{distance_str}）\n"
+            response += f"   类型：{spot['type']}\n"
+            response += f"   地址：{spot['address']}\n"
+            
+            # 添加营业时间信息
+            if spot['opentime_today']:
+                response += f"   营业时间：{spot['opentime_today']}\n"
+            elif spot['open_time_start'] and spot['open_time_end']:
+                # 从timedelta对象转换为HH:MM格式
+                start_time = self._format_time(spot['open_time_start'])
+                end_time = self._format_time(spot['open_time_end'])
+                response += f"   营业时间：{start_time}-{end_time}\n"
+            
+            # 添加电话信息（格式化电话号码）
+            if spot['tel']:
+                # 简单格式化，实际可能需要更复杂的处理
+                tel = self._format_phone(spot['tel'])
+                response += f"   电话：{tel}\n"
+        
+        return response
 
-            response = f"{city_name}的推荐景点有：\n"
-            for i, spot in enumerate(db_results, 1):
-                rating = spot.get('rating', "暂无评分")  # 使用get方法避免KeyError
-                spot_type = spot.get('type', "未知类型")
-                response += f"{i}. {spot['name']}（{spot_type}，评分{rating}）\n"
+    def _format_time(self, timedelta_obj):
+        """将timedelta对象格式化为HH:MM字符串"""
+        if not timedelta_obj:
+            return "未知"
+            
+        hours, remainder = divmod(timedelta_obj.seconds, 3600)
+        minutes = remainder // 60
+        return f"{hours:02d}:{minutes:02d}"
 
-            return response
+    def _format_phone(self, phone_str):
+        """格式化电话号码，提高可读性"""
+        if not phone_str:
+            return "未知"
+        
+        # 尝试分割多个电话号码
+        phones = phone_str.split()
+        if len(phones) > 1:
+            return "；".join(phones)
+        
+        # 尝试格式化单个号码
+        if len(phone_str) >= 7:
+            return f"{phone_str[:3]}-{phone_str[3:7]}-{phone_str[7:]}"
+        
+        return phone_str
 
-        # 5. 评分查询
-        elif query_type == "rating":
-            spot = db_results[0]
-            return f"{spot['name']}的评分为：{spot['rating']}分"
-
-        # 6. 位置查询
-        elif query_type == "location":
-            spot = db_results[0]
-            name = spot['name']
-            address = spot.get("address", "")
-            city = spot.get("city_name", "")
-            province = spot.get("province_name", "")
-
-            if province and city and address:
-                return f"{name}位于{province}{city}{address}。"
-            elif province and city:
-                return f"{name}位于{province}{city}。"
-            elif address:
-                return f"{name}的地址是{address}。"
-            else:
-                return self.UNABLE_TO_ANSWER
-
-        # 8. 联系方式查询
-        elif query_type == "contact":
-            if not db_results:
-                return self.UNABLE_TO_ANSWER
-
-            spot = db_results[0]
-            tel = spot.get('tel')
-            if tel:
-                return f"{spot['name']}的联系电话是：{tel}"
-            else:
-                return self.UNABLE_TO_ANSWER
-
-        # 9. 城市查询
-        elif query_type == "city":
-            if not db_results:
-                return self.UNABLE_TO_ANSWER
-
-            spot = db_results[0]
-            city_name = spot.get('city_name')
-            if city_name:
-                return f"{spot['name']}位于{city_name}。"
-            else:
-                return self.UNABLE_TO_ANSWER
-
-        # 10. 省份查询
-        elif query_type == "province":
-            if not db_results:
-                return self.UNABLE_TO_ANSWER
-
-            spot = db_results[0]
-            province_name = spot.get('province_name')
-            if province_name:
-                return f"{spot['name']}位于{province_name}。"
-            else:
-                return self.UNABLE_TO_ANSWER
-
-        # 其他类型查询
-        return self.UNABLE_TO_ANSWER
+    def _generate_generic_response(self, processed_questions, db_results):
+        """生成通用响应"""
+        response = "查询结果如下：\n"
+        for i, result in enumerate(db_results[:10], 1):  # 只显示前10个结果
+            # 处理价格信息，直接显示"缺失"
+            cost = result['cost']
+            price = "缺失"
+            if cost is not None:
+                price = f"{cost}元" if cost > 0 else "免费"
+            
+            response += f"{i}. {result['name']}（评分：{result['rating']}，价格：{price}）\n"
+            response += f"   地址：{result['address']}\n"
+            
+            # 添加营业时间和电话信息
+            if result['opentime_today']:
+                response += f"   营业时间：{result['opentime_today']}\n"
+            elif result['open_time_start'] and result['open_time_end']:
+                start_time = self._format_time(result['open_time_start'])
+                end_time = self._format_time(result['open_time_end'])
+                response += f"   营业时间：{start_time}-{end_time}\n"
+            
+            if result['tel']:
+                tel = self._format_phone(result['tel'])
+                response += f"   电话：{tel}\n"
+        
+        return response

@@ -2,7 +2,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
-from langchain.memory import ConversationBufferMemory
+from langchain.memory.chat_message_histories import ChatMessageHistory
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain.tools import Tool
 import requests
@@ -16,6 +16,8 @@ from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 from pydantic import SecretStr
+import base64
+import uuid
 
 load_dotenv()
 
@@ -33,6 +35,15 @@ class Attraction:
     phone: str = ""
     opening_hours: str = ""
     ticket_price: str = ""
+
+@dataclass
+class GeneratedImage:
+    """生成的图片信息"""
+    url: str
+    prompt: str
+    timestamp: datetime
+    seed: int = 0
+    attraction_name: str = ""
 
 # ===== API服务层 =====
 class MapAPIService:
@@ -186,6 +197,255 @@ class SearchAPIService:
         self._set_cache(cache_key, info)
         return info
 
+# ===== 图片生成服务 =====
+class ImageGenerationService:
+    """硅基流动图片生成服务类"""
+    
+    def __init__(self):
+        self.api_key = os.getenv("SILICONFLOW_API_KEY")
+        self.base_url = os.getenv("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1")
+        self.model = "Kwai-Kolors/Kolors"
+        
+        if not self.api_key:
+            print("⚠️ 警告: 未配置硅基流动API密钥，图片生成功能将不可用")
+        
+        self.cache = {}
+        self.cache_expiry = {}
+    
+    def _is_cache_valid(self, key: str) -> bool:
+        """检查缓存是否有效"""
+        if key not in self.cache_expiry:
+            return False
+        return datetime.now() < self.cache_expiry[key]
+    
+    def _set_cache(self, key: str, data: GeneratedImage, expiry_hours: int = 1):
+        """设置缓存（图片URL有效期1小时）"""
+        if not hasattr(self, 'cache'):
+            self.cache = {}
+        if not hasattr(self, 'cache_expiry'):
+            self.cache_expiry = {}
+        self.cache[key] = data
+        self.cache_expiry[key] = datetime.now() + timedelta(hours=expiry_hours)
+    
+    def _create_prompt_for_attraction(self, attraction_name: str, attraction_type: str = "", style: str = "realistic") -> str:
+        """为景点创建图片生成提示词"""
+        
+        # 根据景点类型和名称生成合适的提示词
+        base_prompts = {
+            "历史文化": f"Ancient Chinese architecture of {attraction_name}, traditional buildings with elegant roofs, historical atmosphere, cultural heritage site, detailed architectural elements, warm lighting, high quality, photorealistic",
+            "自然风光": f"Beautiful natural landscape of {attraction_name}, scenic mountain and water views, lush vegetation, peaceful atmosphere, golden hour lighting, high resolution, photorealistic",
+            "宗教场所": f"Sacred temple or religious site {attraction_name}, traditional Chinese architecture, incense smoke, peaceful atmosphere, ancient trees, spiritual ambiance, soft lighting, detailed, photorealistic",
+            "园林景观": f"Classical Chinese garden {attraction_name}, traditional pavilions, bridges over water, rock formations, beautiful plants, serene atmosphere, artistic composition, high quality",
+            "博物馆": f"Modern museum building {attraction_name}, contemporary architecture, cultural exhibits, elegant interior design, professional lighting, educational atmosphere, high resolution",
+            "主题公园": f"Exciting theme park {attraction_name}, colorful attractions, joyful atmosphere, entertainment facilities, vibrant colors, dynamic scene, high quality",
+            "城市景观": f"Urban landmark {attraction_name}, modern cityscape, architectural beauty, bustling atmosphere, city lights, professional photography, high quality",
+            "古镇村落": f"Ancient Chinese town or village {attraction_name}, traditional architecture, historical streets, cultural atmosphere, authentic details, warm lighting, photorealistic"
+        }
+        
+        # 特殊景点的专门提示词
+        special_prompts = {
+            # 塔类景点
+            "大雁塔": "Ancient Big Wild Goose Pagoda in Xi'an, traditional Chinese Buddhist architecture, tall brick pagoda, historical Buddhist temple, sunset lighting, detailed stonework, cultural heritage site, photorealistic",
+            "小雁塔": "Small Wild Goose Pagoda in Xi'an, ancient Chinese pagoda, traditional Buddhist architecture, historical temple complex, serene atmosphere, detailed brickwork, photorealistic",
+            "二七塔": "Erqi Tower in Zhengzhou, modern memorial tower, architectural landmark, urban setting, commemorative monument, city skyline, professional photography, high quality",
+            "雷峰塔": "Leifeng Pagoda by West Lake, traditional Chinese pagoda, lakeside setting, beautiful landscape, historical architecture, scenic views, golden hour lighting, photorealistic",
+            "六和塔": "Liuhe Pagoda in Hangzhou, ancient Chinese pagoda, traditional architecture, riverside location, historical monument, detailed craftsmanship, photorealistic",
+            
+            # 桥类景点
+            "小商桥": "Ancient Xiaoshang Bridge in Luohe Henan, historical stone arch bridge, traditional Chinese bridge architecture, ancient engineering marvel, beautiful river scenery, cultural heritage site, photorealistic",
+            "漯河小商桥": "Ancient Xiaoshang Bridge in Luohe Henan, historical stone arch bridge, traditional Chinese bridge architecture, ancient engineering marvel, beautiful river scenery, cultural heritage site, photorealistic",
+            
+            # 重庆景点
+            "洪崖洞": "Hongya Cave in Chongqing, traditional Chinese stilt house architecture, night illumination, Jialing River waterfront, multilevel ancient-style buildings, colorful lighting, urban landscape, photorealistic",
+            "重庆洪崖洞": "Hongya Cave in Chongqing, traditional Chinese stilt house architecture, night illumination, Jialing River waterfront, multilevel ancient-style buildings, colorful lighting, urban landscape, photorealistic",
+            
+            # 长城
+            "长城": "Great Wall of China, ancient defensive fortification, winding through mountains, stone and brick construction, watchtowers, dramatic mountain landscape, historical monument, photorealistic",
+            "北京长城": "Great Wall of China near Beijing, ancient defensive fortification, winding through mountains, stone and brick construction, watchtowers, dramatic mountain landscape, historical monument, photorealistic",
+            "万里长城": "Great Wall of China, ancient defensive fortification, winding through mountains, stone and brick construction, watchtowers, dramatic mountain landscape, historical monument, photorealistic",
+            "八达岭长城": "Badaling Great Wall, ancient Chinese fortification, restored section, mountain scenery, stone construction, tourists, clear blue sky, photorealistic",
+            "慕田峪长城": "Mutianyu Great Wall, ancient Chinese fortification, well-preserved section, autumn foliage, mountain landscape, traditional architecture, photorealistic",
+            
+            # 宫殿类
+            "故宫": "Forbidden City imperial palace, traditional Chinese royal architecture, red walls and golden roofs, grand courtyards, historical magnificence, detailed craftsmanship, photorealistic",
+            "颐和园": "Summer Palace imperial garden, traditional Chinese architecture, beautiful lake views, classical pavilions, serene landscape, artistic composition, photorealistic",
+            "华清宫": "Huaqing Palace in Xi'an, ancient imperial hot springs palace, traditional Chinese architecture, historical gardens, elegant buildings, warm lighting, photorealistic",
+            
+            # 兵马俑
+            "兵马俑": "Terracotta Warriors in Xi'an, ancient Chinese clay soldiers, archaeological site, historical artifacts, underground museum, dramatic lighting, detailed sculpture, photorealistic",
+            
+            # 城墙类
+            "西安城墙": "Ancient city wall of Xi'an, massive stone fortification, traditional Chinese defensive architecture, historical monument, sunset lighting, impressive scale, photorealistic",
+            
+            # 山峰类
+            "华山": "Mount Hua steep cliffs and peaks, dramatic mountain landscape, natural stone formations, misty atmosphere, sunrise lighting, breathtaking views, photorealistic",
+            "泰山": "Mount Tai sacred mountain, stone steps and ancient temples, natural landscape, cultural significance, morning mist, traditional architecture, photorealistic",
+            
+            # 特殊建筑
+            "钟楼": "Ancient bell tower, traditional Chinese architecture, historical landmark, urban setting, detailed craftsmanship, warm evening lighting, photorealistic",
+            "鼓楼": "Ancient drum tower, traditional Chinese architecture, historical monument, cultural significance, detailed woodwork, atmospheric lighting, photorealistic"
+        }
+        
+        # 首先检查是否有特殊提示词
+        for key, prompt in special_prompts.items():
+            if key in attraction_name:
+                return prompt
+        
+        # 根据景点类型选择合适的提示词
+        for category, prompt in base_prompts.items():
+            if category in attraction_type:
+                return prompt
+        
+        # 基于景点名称中的关键词智能生成提示词
+        if "洞" in attraction_name or "崖" in attraction_name:
+            return f"Traditional Chinese architecture {attraction_name}, ancient cave dwellings or cliff buildings, unique architectural design, dramatic landscape setting, historical significance, detailed stonework, photorealistic"
+        elif "桥" in attraction_name:
+            return f"Ancient Chinese bridge {attraction_name}, traditional stone arch bridge architecture, historical engineering marvel, beautiful water scenery, cultural heritage site, detailed stonework, photorealistic"
+        elif "塔" in attraction_name:
+            return f"Ancient Chinese pagoda {attraction_name}, traditional tower architecture, historical Buddhist or cultural monument, detailed stonework or brickwork, serene atmosphere, photorealistic"
+        elif "寺" in attraction_name or "庙" in attraction_name:
+            return f"Traditional Chinese temple {attraction_name}, Buddhist or Taoist architecture, peaceful religious site, incense smoke, ancient trees, spiritual atmosphere, photorealistic"
+        elif "宫" in attraction_name or "殿" in attraction_name:
+            return f"Imperial Chinese palace {attraction_name}, traditional royal architecture, grand buildings, historical magnificence, detailed craftsmanship, golden lighting, photorealistic"
+        elif "山" in attraction_name:
+            return f"Majestic mountain {attraction_name}, natural landscape, dramatic peaks and valleys, misty atmosphere, scenic beauty, sunrise or sunset lighting, photorealistic"
+        elif "湖" in attraction_name or "江" in attraction_name or "河" in attraction_name:
+            return f"Beautiful water landscape {attraction_name}, serene lake or river views, natural scenery, peaceful atmosphere, reflection in water, golden hour lighting, photorealistic"
+        elif "博物馆" in attraction_name:
+            return f"Museum building {attraction_name}, modern or traditional architecture, cultural institution, elegant design, educational atmosphere, professional lighting, photorealistic"
+        elif "古城" in attraction_name or "古镇" in attraction_name:
+            return f"Ancient Chinese town {attraction_name}, traditional architecture, historical streets, cultural heritage, authentic atmosphere, warm lighting, photorealistic"
+        elif "广场" in attraction_name:
+            return f"Public square {attraction_name}, urban landmark, open space, architectural surroundings, city atmosphere, people gathering, professional photography"
+        
+        # 默认提示词 - 更通用和详细
+        return f"Beautiful scenic view of {attraction_name}, Chinese tourist attraction, detailed architecture and landscape, cultural significance, professional photography, high quality, photorealistic, beautiful lighting"
+    
+    def generate_attraction_image(self, attraction: Attraction, style: str = "realistic", use_cache: bool = True) -> Optional[GeneratedImage]:
+        """为景点生成图片"""
+        
+        if not self.api_key:
+            print("❌ 图片生成失败: 未配置API密钥")
+            return None
+        
+        # 检查缓存（如果启用缓存）
+        cache_key = f"image_{attraction.name}_{style}"
+        if use_cache and self._is_cache_valid(cache_key):
+            print(f"✅ 使用缓存的图片: {attraction.name}")
+            return self.cache[cache_key]
+        
+        try:
+            print(f"🎨 正在为 {attraction.name} 生成图片...")
+            
+            # 创建提示词
+            prompt = self._create_prompt_for_attraction(attraction.name, attraction.category, style)
+            
+            # 调用硅基流动API
+            url = f"{self.base_url}/images/generations"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": self.model,
+                "prompt": prompt,
+                "image_size": "1024x1024",
+                "batch_size": 1,
+                "num_inference_steps": 20,
+                "guidance_scale": 7.5,
+                "negative_prompt": "blurry, low quality, distorted, ugly, watermark, text"
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=60)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("images") and len(result["images"]) > 0:
+                    image_url = result["images"][0]["url"]
+                    seed = result.get("seed", 0)
+                    
+                    generated_image = GeneratedImage(
+                        url=image_url,
+                        prompt=prompt,
+                        timestamp=datetime.now(),
+                        seed=seed,
+                        attraction_name=attraction.name
+                    )
+                    
+                    # 缓存结果（如果启用缓存）
+                    if use_cache:
+                        self._set_cache(cache_key, generated_image)
+                    
+                    print(f"✅ 图片生成成功: {attraction.name}")
+                    return generated_image
+                else:
+                    print(f"❌ 图片生成失败: 响应中没有图片数据")
+                    return None
+            else:
+                print(f"❌ 图片生成API调用失败: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ 图片生成异常: {str(e)}")
+            return None
+    
+    def generate_custom_image(self, prompt: str, attraction_name: str = "") -> Optional[GeneratedImage]:
+        """生成自定义提示词的图片"""
+        
+        if not self.api_key:
+            print("❌ 图片生成失败: 未配置API密钥")
+            return None
+        
+        try:
+            print(f"🎨 正在生成自定义图片...")
+            
+            # 调用硅基流动API
+            url = f"{self.base_url}/images/generations"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": self.model,
+                "prompt": prompt,
+                "image_size": "1024x1024",
+                "batch_size": 1,
+                "num_inference_steps": 20,
+                "guidance_scale": 7.5,
+                "negative_prompt": "blurry, low quality, distorted, ugly, watermark, text"
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=60)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("images") and len(result["images"]) > 0:
+                    image_url = result["images"][0]["url"]
+                    seed = result.get("seed", 0)
+                    
+                    generated_image = GeneratedImage(
+                        url=image_url,
+                        prompt=prompt,
+                        timestamp=datetime.now(),
+                        seed=seed,
+                        attraction_name=attraction_name
+                    )
+                    
+                    print(f"✅ 自定义图片生成成功")
+                    return generated_image
+                else:
+                    print(f"❌ 图片生成失败: 响应中没有图片数据")
+                    return None
+            else:
+                print(f"❌ 图片生成API调用失败: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ 图片生成异常: {str(e)}")
+            return None
+
 # ===== 增强版导游智能体 =====
 class EnhancedTourGuideAgent:
     def __init__(self, gaode_key: str = ""):
@@ -210,15 +470,16 @@ class EnhancedTourGuideAgent:
         # 初始化服务
         self.map_service = MapAPIService(gaode_key)
         self.search_service = SearchAPIService()
+        self.image_service = ImageGenerationService()
         
-        # 初始化记忆
-        self.memory = ConversationBufferMemory(
-            memory_key="history",
-            return_messages=True
-        )
+        # 初始化记忆 - 使用新的ChatMessageHistory
+        from langchain.memory.chat_message_histories import ChatMessageHistory
+        from langchain.schema import BaseMessage
         
+        self.message_history = ChatMessageHistory()
         self.current_style = "学术型"
         self.current_attractions = []
+        self.enable_image_generation = True  # 控制是否启用图片生成
         self.chain = self._create_chain()
     
     def _create_chain(self):
@@ -314,12 +575,17 @@ class EnhancedTourGuideAgent:
         self.current_attractions = attractions
         return attractions
     
-    def introduce_attraction_with_search(self, attraction: Attraction, city: str = "") -> str:
-        """使用搜索增强的景点介绍"""
+    def introduce_attraction_with_search(self, attraction: Attraction, city: str = "", generate_image: bool = True) -> tuple[str, Optional[GeneratedImage]]:
+        """使用搜索增强的景点介绍，支持图片生成"""
         print(f"🔍 正在搜索 {attraction.name} 的最新信息...")
         
         # 搜索景点最新信息
         search_info = self.search_service.search_attraction_info(attraction.name, city)
+        
+        # 生成图片（如果启用）
+        generated_image = None
+        if generate_image and self.enable_image_generation:
+            generated_image = self.image_service.generate_attraction_image(attraction)
         
         # 构建增强的查询
         query = f"""
@@ -342,18 +608,28 @@ class EnhancedTourGuideAgent:
         """
         
         # 调用模型
-        response = self.chain.invoke({
-            "input": query,
-            "history": self.memory.load_memory_variables({})["history"]
-        })
+        response = self.llm.invoke([
+            SystemMessage(content=self._get_enhanced_system_prompt()),
+            HumanMessage(content=query)
+        ]).content
+        
+        # 如果生成了图片，在回答中添加图片信息
+        if generated_image:
+            # 直接使用原始图片URL
+            image_section = self.create_image_section_with_fallback(
+                generated_image.url, 
+                attraction.name
+            )
+            response += image_section
+            print(f"✅ 图片链接已成功嵌入到回答中: {attraction.name}")
+            print(f"🔗 图片URL: {generated_image.url}")
         
         # 保存到记忆
-        self.memory.save_context(
-            {"input": f"介绍{attraction.name}"},
-            {"output": response}
-        )
+        from langchain.schema import HumanMessage, AIMessage
+        self.message_history.add_user_message(f"介绍{attraction.name}")
+        self.message_history.add_ai_message(response)
         
-        return response
+        return response, generated_image
     
     def filter_attractions(self, attractions: List[Attraction], 
                           category: str = "", 
@@ -376,9 +652,192 @@ class EnhancedTourGuideAgent:
         
         return filtered
 
-    def stream_attraction_guide(self, user_input: str):
-        """流式返回景点讲解内容"""
+    def stream_attraction_guide(self, user_input: str, generate_image: bool = True):
+        """流式返回景点讲解内容，支持图片生成"""
         try:
+            # 检查用户是否询问特定景点，如果没有预设景点，则根据用户输入创建临时景点对象
+            attraction_to_generate = None
+            if self.current_attractions:
+                # 从已搜索的景点中查找匹配
+                for attraction in self.current_attractions:
+                    if attraction.name in user_input:
+                        attraction_to_generate = attraction
+                        break
+            
+            # 如果没有找到预设景点，但用户明确询问某个景点，则创建临时景点对象用于图片生成
+            if not attraction_to_generate and generate_image and self.enable_image_generation:
+                # 智能景点名称提取逻辑
+                import re
+                
+                # 扩展的景点关键词模式 - 更全面的匹配
+                attraction_patterns = [
+                    # 北京景点
+                    r'故宫博物院|故宫',
+                    r'天安门广场|天安门',
+                    r'长城|八达岭长城|万里长城|居庸关长城|慕田峪长城|北京长城',
+                    r'颐和园',
+                    r'天坛公园|天坛',
+                    r'北海公园|北海',
+                    r'景山公园|景山',
+                    r'圆明园',
+                    r'明十三陵|十三陵',
+                    r'恭王府',
+                    r'雍和宫',
+                    r'鸟巢|国家体育场',
+                    r'水立方|国家游泳中心',
+                    
+                    # 重庆景点
+                    r'洪崖洞|重庆洪崖洞',
+                    r'解放碑|重庆解放碑',
+                    r'磁器口|磁器口古镇',
+                    r'朝天门|重庆朝天门',
+                    r'武隆天坑|武隆',
+                    r'大足石刻',
+                    r'红岩村|红岩革命纪念馆',
+                    
+                    # 西安景点
+                    r'大雁塔|大慈恩寺',
+                    r'小雁塔|荐福寺',
+                    r'兵马俑|秦始皇兵马俑|秦兵马俑',
+                    r'华清宫|华清池',
+                    r'西安城墙|明城墙',
+                    r'钟楼|西安钟楼',
+                    r'鼓楼|西安鼓楼',
+                    r'大明宫|大明宫遗址',
+                    r'陕西历史博物馆',
+                    r'回民街|回坊',
+                    
+                    # 郑州景点
+                    r'二七塔|二七纪念塔',
+                    r'河南博物院',
+                    r'黄河风景名胜区',
+                    r'郑州城隍庙',
+                    r'嵩山|少林寺',
+                    r'中原福塔',
+                    
+                    # 河南其他景点
+                    r'小商桥|漯河小商桥',
+                    r'开封府|开封',
+                    r'龙门石窟',
+                    r'白马寺',
+                    r'云台山',
+                    r'红旗渠',
+                    
+                    # 杭州景点
+                    r'西湖',
+                    r'雷峰塔',
+                    r'灵隐寺',
+                    r'千岛湖',
+                    r'宋城',
+                    r'西溪湿地',
+                    r'六和塔',
+                    r'苏堤|白堤',
+                    
+                    # 五岳名山
+                    r'黄山',
+                    r'泰山',
+                    r'华山',
+                    r'峨眉山',
+                    r'衡山',
+                    r'恒山',
+                    r'嵩山',
+                    
+                    # 其他著名景点
+                    r'九寨沟',
+                    r'张家界',
+                    r'桂林山水',
+                    r'漓江',
+                    r'天门山',
+                    r'黄果树瀑布',
+                    r'三峡|长江三峡',
+                    r'武当山',
+                    r'庐山',
+                    r'普陀山',
+                    r'五台山',
+                    r'天坛',
+                    r'乐山大佛',
+                    r'都江堰'
+                ]
+                
+                # 通用景点后缀模式 - 用于识别没有预定义的景点
+                generic_patterns = [
+                    r'([^，。！？\s]{2,10}(?:洞|崖|桥|塔|寺|庙|宫|殿|观|亭|楼|阁|园|湖|江|河|海|山|峰|峡|瀑布|古城|遗址|博物馆|纪念馆|公园|广场|大桥|古镇|村落|景区|风景区))',
+                    r'([^，。！？\s]{2,10}(?:故居|陵墓|墓|祠堂|书院|学府|大学|府邸|王府|府第))',
+                    r'([^，。！？\s]{2,10}(?:古街|老街|步行街|商业街|文化街|美食街))',
+                    r'([^，。！？\s]{2,10}(?:古村|古镇|水乡|古城|老城|新城|开发区))'
+                ]
+                
+                # 首先尝试精确匹配预定义景点
+                attraction_name = None
+                for pattern in attraction_patterns:
+                    match = re.search(pattern, user_input)
+                    if match:
+                        attraction_name = match.group()
+                        break
+                
+                # 如果没有精确匹配，尝试通用模式匹配
+                if not attraction_name:
+                    for pattern in generic_patterns:
+                        matches = re.findall(pattern, user_input)
+                        if matches:
+                            # 选择最长的匹配作为景点名称
+                            attraction_name = max(matches, key=len)
+                            break
+                
+                # 如果仍然没有匹配，尝试提取包含地名的景点
+                if not attraction_name:
+                    # 地名+景点类型的模式 - 改进版
+                    city_attraction_patterns = [
+                        r'([^，。！？\s]*?[市县区镇]?)\s*([^，。！？\s]{2,8}(?:洞|崖|桥|塔|寺|庙|宫|殿|观|亭|楼|阁|园|湖|山|峰|景区|古城|博物馆|公园|广场))',
+                        r'(重庆|北京|上海|天津|河南|漯河|开封|洛阳|郑州|安阳|新乡|焦作|濮阳|许昌|漯河|三门峡|南阳|商丘|信阳|周口|驻马店|济源|西安|杭州|苏州|南京)\s*([^，。！？\s]{2,8}(?:洞|崖|桥|塔|寺|庙|宫|殿|观|亭|楼|阁|园|湖|山|峰|景区|古城|博物馆|公园|广场))'
+                    ]
+                    
+                    for pattern in city_attraction_patterns:
+                        match = re.search(pattern, user_input)
+                        if match:
+                            city, attraction = match.groups()
+                            # 如果景点名称已经包含地名，就直接使用，否则组合
+                            if city and city.strip() and not attraction.startswith(city.strip()):
+                                attraction_name = f"{city.strip()}{attraction}"
+                            else:
+                                attraction_name = attraction
+                            break
+                
+                if attraction_name:
+                    # 智能推断景点类型
+                    def infer_category(name):
+                        if any(keyword in name for keyword in ['桥', '塔', '寺', '庙', '宫', '殿', '观', '祠', '陵', '墓', '故居', '遗址']):
+                            return '历史文化'
+                        elif any(keyword in name for keyword in ['山', '峰', '峡', '湖', '海', '江', '河', '瀑布', '森林', '湿地']):
+                            return '自然风光'
+                        elif any(keyword in name for keyword in ['园', '公园', '花园', '植物园', '动物园']):
+                            return '园林景观'
+                        elif any(keyword in name for keyword in ['博物馆', '纪念馆', '展览馆', '美术馆', '科技馆']):
+                            return '博物馆'
+                        elif any(keyword in name for keyword in ['广场', '街', '商业区', '步行街']):
+                            return '城市景观'
+                        elif any(keyword in name for keyword in ['古镇', '古村', '水乡', '古城']):
+                            return '古镇村落'
+                        else:
+                            return '历史文化'  # 默认类型
+                    
+                    category = infer_category(attraction_name)
+                    
+                    # 创建临时景点对象
+                    attraction_to_generate = Attraction(
+                        name=attraction_name,
+                        address=f"{attraction_name}景区",
+                        latitude=0.0,
+                        longitude=0.0,
+                        category=category,
+                        rating=4.5,
+                        distance=0,
+                        description=f"著名景点{attraction_name}"
+                    )
+                    print(f"🎯 智能识别到景点: {attraction_name} (类型: {category})")
+                else:
+                    print("❌ 未能识别到有效的景点名称")
+            
             # 增强用户输入，添加更多上下文
             enhanced_input = f"""
             作为专业的景点讲解员，请用{self.current_style}风格详细介绍用户询问的景点。
@@ -398,14 +857,38 @@ class EnhancedTourGuideAgent:
             # 调用AI模型
             response = self.chain.invoke({
                 "input": enhanced_input,
-                "history": self.memory.load_memory_variables({})["history"]
+                "history": self.message_history.messages
             })
             
+            # 清理AI回答中可能包含的图片相关内容，避免重复显示
+            import re
+            # 移除AI回答中的图片展示部分（如果有的话）
+            response = re.sub(r'## 🖼️.*?</div>\s*```', '', response, flags=re.DOTALL)
+            response = re.sub(r'📷.*?网络可能受限.*?\n', '', response, flags=re.DOTALL)
+            response = re.sub(r'\*.*?景观图\*\s*\n', '', response, flags=re.DOTALL)
+            
+            # 如果找到了相关景点且启用图片生成，则生成图片
+            generated_image = None
+            if attraction_to_generate and generate_image and self.enable_image_generation:
+                print(f"🎨 正在为 {attraction_to_generate.name} 生成图片...")
+                generated_image = self.image_service.generate_attraction_image(attraction_to_generate, use_cache=True)
+                
+                if generated_image:
+                    # 直接使用原始图片URL
+                    image_section = self.create_image_section_with_fallback(
+                        generated_image.url, 
+                        attraction_to_generate.name
+                    )
+                    response += image_section
+                    print(f"✅ 图片链接已成功嵌入到回答中: {attraction_to_generate.name}")
+                    print(f"🔗 图片URL: {generated_image.url}")
+                else:
+                    print(f"❌ 图片生成失败: {attraction_to_generate.name}")
+            
             # 保存到记忆
-            self.memory.save_context(
-                {"input": user_input},
-                {"output": response}
-            )
+            from langchain.schema import HumanMessage, AIMessage
+            self.message_history.add_user_message(user_input)
+            self.message_history.add_ai_message(response)
             
             # 优化流式输出，按句子分割而不是单词
             sentences = response.replace('\n\n', '\n').split('\n')
@@ -421,6 +904,51 @@ class EnhancedTourGuideAgent:
             error_message = f"抱歉，在处理您的请求时出现了错误：{str(e)}"
             print(f"景点讲解错误: {e}")
             yield error_message
+    
+    def toggle_image_generation(self, enabled: bool) -> str:
+        """开启或关闭图片生成功能"""
+        self.enable_image_generation = enabled
+        status = "已开启" if enabled else "已关闭"
+        return f"图片生成功能{status}"
+    
+    def generate_custom_attraction_image(self, prompt: str, attraction_name: str = "") -> Optional[GeneratedImage]:
+        """生成自定义景点图片"""
+        if not self.enable_image_generation:
+            print("❌ 图片生成功能已关闭")
+            return None
+        
+        return self.image_service.generate_custom_image(prompt, attraction_name)
+    
+    def create_image_section_with_fallback(self, image_url: str, attraction_name: str) -> str:
+        """创建图片展示部分 - 简化版"""
+        # 使用外部服务生成SVG占位图片
+        from image_proxy import image_proxy_service
+        fallback_image = image_proxy_service.generate_placeholder_svg_base64(attraction_name)
+        
+        # 生成唯一的图片ID，避免重复加载问题
+        import uuid
+        image_id = f"img_{uuid.uuid4().hex[:8]}"
+        
+        # 直接使用原始URL显示图片，同时提供SVG占位图片作为备用
+        return f"""
+
+## 🖼️ 景点视觉展示
+
+<div class="image-container" style="text-align: center; margin: 20px 0;">
+    <img id="{image_id}" src="{image_url}" 
+         alt="{attraction_name}" 
+         style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin: 10px 0;" 
+         onerror="if(this.src !== '{fallback_image}') {{ this.src='{fallback_image}'; console.log('图片加载失败，已切换到占位图'); }}" />
+    <p style="margin-top: 10px; font-style: italic; color: #666; font-size: 14px;">
+        *AI生成的{attraction_name}景观图*
+    </p>
+    <div style="margin-top: 8px;">
+        <a href="{image_url}" target="_blank" class="image-link" style="color: #007bff; text-decoration: none; font-size: 12px; padding: 4px 8px; background-color: #e3f2fd; border-radius: 4px;">
+            🔗 查看原始图片
+        </a>
+    </div>
+</div>
+"""
 
 # 全局变量存储用户的导游智能体实例
 user_tour_guide_agents = {}
@@ -436,7 +964,25 @@ def clear_tour_guide_agents(email: str):
     if email in user_tour_guide_agents:
         del user_tour_guide_agents[email]
 
-def get_attraction_guide_response_stream(user_message: str, email: str):
-    """获取景点讲解的流式响应"""
+def get_attraction_guide_response_stream(user_message: str, email: str, generate_image: bool = True):
+    """获取景点讲解的流式响应，支持图片生成"""
     agent = get_tour_guide_agent(email)
-    return agent.stream_attraction_guide(user_message)
+    return agent.stream_attraction_guide(user_message, generate_image)
+
+def toggle_image_generation_for_user(email: str, enabled: bool) -> str:
+    """为特定用户开启或关闭图片生成功能"""
+    agent = get_tour_guide_agent(email)
+    return agent.toggle_image_generation(enabled)
+
+def generate_attraction_image_for_user(email: str, attraction_name: str, custom_prompt: str = "") -> Optional[GeneratedImage]:
+    """为用户生成景点图片"""
+    agent = get_tour_guide_agent(email)
+    
+    if custom_prompt:
+        return agent.generate_custom_attraction_image(custom_prompt, attraction_name)
+    else:
+        # 查找景点信息
+        for attraction in agent.current_attractions:
+            if attraction.name == attraction_name:
+                return agent.image_service.generate_attraction_image(attraction)
+        return None

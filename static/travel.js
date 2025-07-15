@@ -558,9 +558,11 @@ function closeAttractionGuideDialog() {
 function startAttractionGuideFromModal() {
     const attractionInput = document.getElementById('attractionInput');
     const guideStyleSelect = document.getElementById('guideStyleSelect');
+    const generateImageCheckbox = document.getElementById('generateImageCheckbox');
     
     const attractionName = attractionInput.value.trim();
     const style = guideStyleSelect.value;
+    const generateImage = generateImageCheckbox.checked;
     
     if (!attractionName) {
         alert('请输入要了解的景点名称');
@@ -572,7 +574,8 @@ function startAttractionGuideFromModal() {
     
     // 构建查询消息
     const guideMessage = `请用${style}风格详细介绍${attractionName}景点，包括历史背景、文化意义、建筑特色、参观建议等信息。`;
-    const userRequestContent = `🏛️ **景点讲解请求**\n\n**景点名称**: ${attractionName}\n**讲解风格**: ${style}\n\n正在为您生成专业的景点讲解...`;
+    const imageOption = generateImage ? "✅ 已启用图片生成" : "❌ 已禁用图片生成";
+    const userRequestContent = `🏛️ **景点讲解请求**\n\n**景点名称**: ${attractionName}\n**讲解风格**: ${style}\n**图片生成**: ${imageOption}\n\n正在为您生成专业的景点讲解...`;
     
     // 添加用户请求消息
     addMessage(userRequestContent, true);
@@ -587,7 +590,8 @@ function startAttractionGuideFromModal() {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            message: guideMessage
+            message: guideMessage,
+            generate_image: generateImage
         })
     })
     .then(response => {
