@@ -13,15 +13,19 @@
 ## 📸 项目展示
 
 <!-- 预留展示图片位置 -->
+
+![alt text](img/image.png)
 <div align="center">
-  <img src="./docs/images/main-interface.png" alt="主界面展示" width="800"/>
+  
   <p><i>主界面 - 智能对话与旅行规划</i></p>
 </div>
 
+
+![alt text](img/image-1.png)
 <div align="center">
-  <img src="./docs/images/architecture-overview.png" alt="系统架构概览" width="800"/>
   <p><i>系统架构 - 多智能体协同工作流程</i></p>
 </div>
+
 
 ## 🏗️ 技术架构
 

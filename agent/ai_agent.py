@@ -73,7 +73,7 @@ class LLMFactory:
     def __init__(self, config: ConfigManager):
         self.config = config
     
-    def create_llm(self, model: str = "gpt-4.1", temperature: float = 0.8, 
+    def create_llm(self, model: str = "gpt-4.1-nano", temperature: float = 0.8, 
                    streaming: bool = False) -> ChatOpenAI:
         """创建LLM实例"""
         return ChatOpenAI(
