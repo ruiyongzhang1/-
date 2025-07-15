@@ -1,11 +1,85 @@
-# 青鸾向导 (QL Guide) - 智能AI助手系统
+# 青鸾向导 (Qingluan Guide) - 下一代AI智能旅行助手 🚀
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
 [![Flask](https://img.shields.io/badge/Flask-2.3.3-green.svg)](https://flask.palletsprojects.com)
 [![Redis](https://img.shields.io/badge/Redis-5.0+-red.svg)](https://redis.io)
+[![LangChain](https://img.shields.io/badge/LangChain-0.1+-purple.svg)](https://langchain.com)
+[![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector-orange.svg)](https://chromadb.com)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-一个功能强大的智能AI助手系统，基于多智能体架构，支持对话记忆、旅行规划、PDF生成等多种功能。
+> **基于前沿多智能体架构的企业级AI旅行规划平台**  
+> 融合RAG检索增强、实时记忆管理、智能PDF生成等核心技术，为用户提供个性化、智能化的旅行规划体验
+
+## 📸 项目展示
+
+<!-- 预留展示图片位置 -->
+<div align="center">
+  <img src="./docs/images/main-interface.png" alt="主界面展示" width="800"/>
+  <p><i>主界面 - 智能对话与旅行规划</i></p>
+</div>
+
+<div align="center">
+  <img src="./docs/images/architecture-overview.png" alt="系统架构概览" width="800"/>
+  <p><i>系统架构 - 多智能体协同工作流程</i></p>
+</div>
+
+## 🏗️ 技术架构
+
+### 系统架构流程图
+<div align="center">
+  <img src="https://mdn.alipayobjects.com/one_clip/afts/img/vbjFQaA4KoUAAAAATWAAAAgAoEACAQFr/original" alt="系统架构流程图" width="800"/>
+  <p><i>数据流和组件交互关系</i></p>
+</div>
+
+### 多智能体系统架构
+<div align="center">
+  <img src="https://mdn.alipayobjects.com/one_clip/afts/img/OWLAQYnCtogAAAAAS6AAAAgAoEACAQFr/original" alt="多智能体系统架构" width="800"/>
+  <p><i>智能体继承关系和协作模式</i></p>
+</div>
+
+## 💻 核心技术栈
+
+### 🎯 前端技术
+- **现代Web技术栈**: HTML5 + CSS3 + Vanilla JavaScript
+- **响应式设计**: 适配桌面端、平板和移动设备
+- **实时通信**: Server-Sent Events (SSE) 流式响应
+- **交互体验**: Markdown渲染、代码高亮、表格展示
+- **UI组件**: 自定义组件库，现代化界面设计
+
+### 🛠️ 后端架构
+- **Web框架**: Flask (轻量级、高性能)
+- **WSGI服务器**: Gunicorn (生产级部署)
+- **异步处理**: 支持并发请求和非阻塞I/O
+- **API设计**: RESTful架构，清晰的接口规范
+- **安全防护**: CSRF保护、XSS防护、SQL注入防护
+
+### 🤖 AI引擎
+- **语言模型**: OpenAI GPT-4/3.5-turbo、DeepSeek等多模型支持
+- **框架集成**: LangChain (AI应用开发框架)
+- **工作流引擎**: LangGraph (复杂智能体工作流)
+- **模型上下文协议**: MCP (Model Context Protocol) 标准化工具集成
+- **智能路由**: 基于意图识别的智能体选择算法
+
+### 🧠 记忆与存储
+- **分布式缓存**: Redis (高性能内存数据库)
+- **关系数据库**: MySQL + SQLite 双数据库支持
+- **向量数据库**: ChromaDB (语义搜索和相似度计算)
+- **会话管理**: 基于Redis的分布式会话存储
+- **数据持久化**: 多层存储架构，确保数据安全
+
+### 🔍 搜索与检索
+- **RAG技术**: 检索增强生成，提升回答准确性
+- **向量化检索**: OpenAI embeddings + ChromaDB
+- **混合搜索**: 结合关键词搜索和语义搜索
+- **实时API集成**: Google Maps、搜索引擎、天气服务
+- **智能缓存**: 多级缓存策略，优化响应速度
+
+### 📊 数据处理
+- **文档处理**: PDF、TXT等多格式文档解析
+- **数据清洗**: 智能文本预处理和结构化
+- **批量操作**: 高效的数据导入和处理流程
+- **格式转换**: Markdown到PDF的智能转换
+- **中文支持**: 完整的中文字体和编码支持
 
 ## 🌟 核心特性
 

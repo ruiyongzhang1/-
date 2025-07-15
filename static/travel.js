@@ -173,124 +173,120 @@ function addTravelLoader() {
 }
 
 
-// 开始旅行规划
+// ====================== 旅行规划主入口 ======================
 function startTravelPlanning(formData) {
-    isPlanning = true;
-    const planButton = document.getElementById('planButton');
-    const messageInput = document.getElementById('message-input');
-    const sendBtn = document.getElementById('send-btn1');
-    
-    // 更新按钮状态 - 添加加载动画
-    planButton.innerHTML = '⏳ 正在制定计划...';
-    planButton.disabled = true;
-    planButton.classList.add('loading');
-    
-    // 添加用户请求消息(隐藏起来)
-    // addMessage(formatTravelRequest(formData), true);
-    
-    // 添加三点式加载动画
-    const loadingMessage = addTravelLoader();
-    
-    // 发送规划请求
-    fetch('/plan_travel', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('网络错误');
-        }
-        
-        // 移除三点式加载动画
-        loadingMessage.remove();
+  isPlanning = true;
 
-        // 创建响应消息容器
-        const responseDiv = addMessage('', false);
-        const contentDiv = responseDiv.querySelector('.message-content');
-        
-        // 处理流式响应
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let responseText = '';
-        
-        function readStream() {
-            reader.read().then(({done, value}) => {
-                if (done) {
-                    currentPlan = responseText;
-                    isPlanning = false;
-                    
-                    // 添加到对话历史
-                    conversationHistory.push({
-                        content: formatTravelRequest(formData),
-                        isUser: true
-                    });
-                    conversationHistory.push({
-                        content: responseText,
-                        isUser: false
-                    });
-                    
-                    // 显示PDF导出按钮
-                    document.getElementById('exportPdfBtn').style.display = 'inline-block';
-                    
-                    // 恢复按钮状态 - 移除加载动画
-                    planButton.innerHTML = '✨ 重新制定计划';
-                    planButton.disabled = false;
-                    planButton.classList.remove('loading');
-                    
-                    // 启用聊天输入
-                    messageInput.disabled = false;
-                    sendBtn.disabled = false;
-                    messageInput.placeholder = '对计划有疑问？随时问我！';
-                    
-                    return;
-                }
-                
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n');
-                
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.slice(6));
-                            if (data.chunk) {
-                                responseText += data.chunk;
-                                contentDiv.innerHTML = marked.parse(responseText);
-                                contentDiv.scrollTop = contentDiv.scrollHeight;
-                            } else if (data.error) {
-                                contentDiv.innerHTML = `<div style="color: red;">错误: ${data.error}</div>`;
-                                isPlanning = false;
-                                planButton.innerHTML = '✨ 重新制定计划';
-                                planButton.disabled = false;
-                                planButton.classList.remove('loading');
-                                return;
-                            }
-                        } catch (e) {
-                            console.log('解析数据出错:', e);
-                        }
-                    }
-                }
-                
-                readStream();
-            });
+  /* ---------- UI 准备 ---------- */
+  const planButton   = document.getElementById('planButton');
+  const messageInput = document.getElementById('message-input');
+  const sendBtn      = document.getElementById('send-btn1');
+
+  planButton.textContent = '⏳ 正在制定计划...';
+  planButton.disabled    = true;
+  planButton.classList.add('loading');
+
+  const loadingDots = addTravelLoader();           // “...” 动画
+
+  /* ---------- 发请求 ---------- */
+  fetch('/plan_travel', {
+    method : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body   : JSON.stringify(formData)
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('网络错误');
+
+    loadingDots.remove();                          // 关掉 “...”
+    const planBubble = addMessage('', false);      // 规划气泡
+    const planBody   = planBubble.querySelector('.message-content');
+
+    /* ====== 准备流读取 ====== */
+    const reader   = res.body.getReader();
+    const decoder  = new TextDecoder();
+    let   buffer   = '';            // 存放拆包残余
+    let   planText = '';            // 行程规划正文
+    let   infoText = '';            // 暂存信息收集全文
+
+    /* -- 处理单条 SSE 事件 -- */
+    function consume(evt) {
+      /* 信息收集，只缓存 */
+      if (evt.info_collection_result) {
+        infoText = evt.info_collection_result;
+        return;
+      }
+      /* 行程规划流 */
+      if (evt.chunk) {
+        planText += evt.chunk;
+        planBody.innerHTML = marked.parse(planText);
+        planBody.scrollTop = planBody.scrollHeight;
+        return;
+      }
+      /* 错误 */
+      if (evt.error) {
+        planBody.innerHTML =
+          `<div style="color:red;">错误：${evt.error}</div>`;
+      }
+    }
+
+    /* -- 递归读取流 -- */
+    function pump() {
+      reader.read().then(({ done, value }) => {
+        if (done) {
+          /* ========== 全部结束，插入信息收集卡片 ========== */
+          if (infoText) {
+            const infoBubble = addMessage('', false);
+            infoBubble.classList.add('info-collector');
+            infoBubble.querySelector('.message-content').innerHTML =
+              marked.parse(infoText);
+          }
+
+          /* UI 收尾 */
+          currentPlan = planText;
+          isPlanning  = false;
+          planButton.textContent = '✨ 重新制定计划';
+          planButton.disabled    = false;
+          planButton.classList.remove('loading');
+          messageInput.disabled  = false;
+          sendBtn.disabled       = false;
+          document.getElementById('exportPdfBtn').style.display = 'inline-block';
+          return;
         }
-        
-        readStream();
-    })
-    .catch(error => {
-        console.error('规划出错:', error);
-        loadingMessage.remove();
-        addMessage(`<div style="color: red;">规划过程中出现错误: ${error.message}</div>`, false);
-        isPlanning = false;
-        planButton.innerHTML = '✨ 重新制定计划';
-        planButton.disabled = false;
-        planButton.classList.remove('loading');
-        
-        // 确保PDF导出按钮在错误时保持隐藏
-        document.getElementById('exportPdfBtn').style.display = 'none';
-    });
+
+        /* 拆分 \n\n 事件边界 */
+        buffer += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf('\n\n')) !== -1) {
+          const raw = buffer.slice(0, idx).trim();
+          buffer    = buffer.slice(idx + 2);
+
+          if (!raw) continue; // ping
+
+          try {
+            const evt = raw.startsWith('data:')
+              ? JSON.parse(raw.slice(5).trim())
+              : JSON.parse(raw);
+            consume(evt);
+          } catch (e) {
+            console.error('JSON 解析失败', e, raw);
+          }
+        }
+        pump();   // 继续读
+      });
+    }
+    pump();       // ⬅️ 启动
+  })
+  .catch(err => {
+    console.error('规划出错:', err);
+    loadingDots.remove();
+    addMessage(`<div style="color:red;">规划过程中出现错误：${err.message}</div>`, false);
+
+    isPlanning = false;
+    planButton.textContent = '✨ 重新制定计划';
+    planButton.disabled    = false;
+    planButton.classList.remove('loading');
+    document.getElementById('exportPdfBtn').style.display = 'none';
+  });
 }
 
 // 发送消息

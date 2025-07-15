@@ -11,6 +11,9 @@ env/
 .env
 *.env
 
+dump.rdb
+app.db
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -43,3 +46,4 @@ build/
 .idea/
 *.db
 CLAUDE.md
+产品.md

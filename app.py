@@ -95,9 +95,12 @@ def stream_response(generator, user_message, email, conv_id, agent_type):
         try:
             full_response = ""
             for chunk in generator:
-                if chunk:
-                    full_response += chunk
-                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+                if isinstance(chunk, dict):
+                    # 直接推送：里面可能是 info_collection_result / 其它标签
+                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                    continue
+                full_response += chunk or ""
+                yield f"data: {json.dumps({'chunk': chunk}, ensure_ascii=False)}\n\n"
             save_conversation(email, [
                 {"text": user_message, "is_user": True, "agent_type": agent_type},
                 {"text": full_response, "is_user": False, "agent_type": agent_type},
