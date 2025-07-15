@@ -7,7 +7,7 @@ import concurrent.futures
 from typing import Dict, Any, List, Optional, Generator
 from agent.RAG.retriever import rag_search
 from agent.sql.attraction_ezqa_service import myanswer
-
+from agent.shared_cache import INFO_CACHE
 # 抑制LangChain弃用警告
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -73,7 +73,7 @@ class LLMFactory:
     def __init__(self, config: ConfigManager):
         self.config = config
     
-    def create_llm(self, model: str = "gpt-4.1-nano", temperature: float = 0.1, 
+    def create_llm(self, model: str = "gpt-4.1", temperature: float = 0.8, 
                    streaming: bool = False) -> ChatOpenAI:
         """创建LLM实例"""
         return ChatOpenAI(
@@ -88,75 +88,132 @@ class MCPManager:
     """MCP连接和工具管理"""
     def __init__(self, config: ConfigManager):
         self.config = config
+        self.mcp_client = None
     
     async def load_tools_async(self) -> List[Any]:
-        """异步加载MCP工具"""
+        """异步加载MCP工具 - 使用官方langchain-mcp-adapters方法"""
         try:
-            # 直接导入本地MCP工具，避免MCP协议加载问题
-            from agent.mcp_server import get_current_time, search_google, search_google_maps, search_google_flights, search_google_hotels
-            from langchain.tools import tool
+            # 方法1：使用 MultiServerMCPClient 连接本地MCP服务器
+            from langchain_mcp_adapters.client import MultiServerMCPClient
+            from langchain_mcp_adapters.tools import load_mcp_tools
             
-            # 创建LangChain工具包装器
+            # 创建MCP客户端配置
+            server_config = {
+                "travel_tools": {
+                    "command": "python",
+                    "args": [self.config.mcp_server_path],
+                    "transport": "stdio",
+                    "env": {
+                        "SEARCHAPI_API_KEY": self.config.searchapi_key,
+                        "MCP_TRANSPORT": "stdio"
+                    }
+                }
+            }
+            
+            print("🔧 [MCP] 正在使用 MultiServerMCPClient 连接到本地MCP服务器...")
+            self.mcp_client = MultiServerMCPClient(server_config)
+            
+            try:
+                # 加载工具
+                tools = await self.mcp_client.get_tools()
+                print(f"✅ [MCP] 成功加载了 {len(tools)} 个MCP工具")
+                
+                # 打印工具详情
+                for i, tool in enumerate(tools):
+                    print(f"  工具 {i+1}: {tool.name} - {tool.description}")
+                
+                return tools
+                
+            except Exception as e:
+                print(f"❌ [MCP] MultiServerMCPClient 连接失败: {e}")
+                print("🔄 [MCP] 回退到直接导入模式...")
+                return await self._load_tools_direct()
+                
+        except ImportError as e:
+            print(f"❌ [MCP] langchain-mcp-adapters 不可用: {e}")
+            print("🔄 [MCP] 回退到直接导入模式...")
+            return await self._load_tools_direct()
+        except Exception as e:
+            print(f"❌ [MCP] 加载工具时发生错误: {e}")
+            print("🔄 [MCP] 回退到直接导入模式...")
+            return await self._load_tools_direct()
+    
+    async def _load_tools_direct(self) -> List[Any]:
+        """直接导入MCP工具的备用方法"""
+        try:
+            # 直接导入本地MCP工具，返回完整的JSON结果
+            from agent.mcp_server import (
+                get_current_time, search_google, search_google_maps, 
+                search_google_flights, search_google_hotels
+            )
+            from langchain.tools import tool
+            import json
+            
+            # 创建LangChain工具包装器，返回详细的搜索结果
             tools = []
             
-            # 包装get_current_time
+            # 包装get_current_time - 返回完整结果
             @tool
-            async def get_current_time_tool(format: str = "iso") -> str:
+            async def get_current_time_tool(format: str = "iso", days_offset: str = "0", 
+                                          return_future_dates: str = "false", future_days: str = "7") -> str:
                 """获取当前系统时间和旅行日期建议"""
-                result = await get_current_time(format=format)
-                if isinstance(result, dict) and "date" in result:
-                    return f"当前时间: {result['date']}"
-                else:
-                    return str(result)
+                result = await get_current_time(format=format, days_offset=days_offset, 
+                                              return_future_dates=return_future_dates, future_days=future_days)
+                # 返回格式化的JSON字符串，便于前端显示
+                return json.dumps(result, ensure_ascii=False, indent=2)
             
-            # 包装search_google
+            # 包装search_google - 返回完整结果
             @tool
-            async def search_google_tool(q: str) -> str:
-                """搜索Google搜索结果"""
-                result = await search_google(q=q)
-                if isinstance(result, dict):
-                    if "error" in result:
-                        return f"搜索失败: {result['error']}"
-                    elif "organic_results" in result:
-                        results = result["organic_results"][:5]  # 取前5个结果
-                        search_summary = []
-                        for r in results:
-                            title = r.get('title', '')
-                            snippet = r.get('snippet', '')[:100]  # 截取前100字符
-                            search_summary.append(f"{title}: {snippet}")
-                        return f"找到 {len(results)} 个搜索结果:\n" + "\n".join(search_summary)
-                    else:
-                        return f"搜索完成，结果: {list(result.keys())}"
-                else:
-                    return str(result)
+            async def search_google_tool(q: str, location: str = None, gl: str = "cn", 
+                                       hl: str = "zh-cn", num: str = "10") -> str:
+                """搜索Google搜索结果，返回完整的搜索结果包括有机结果、知识图谱、相关问题等"""
+                result = await search_google(q=q, location=location, gl=gl, hl=hl, num=num)
+                
+                # 如果有错误，返回错误信息
+                if isinstance(result, dict) and "error" in result:
+                    return f"搜索失败: {result['error']}"
+                
+                # 返回完整的搜索结果，包含所有API返回的数据
+                search_info = {
+                    "query": q,
+                    "search_metadata": result.get("search_metadata", {}),
+                    "organic_results": result.get("organic_results", []),
+                    "knowledge_graph": result.get("knowledge_graph", {}),
+                    "answer_box": result.get("answer_box", {}),
+                    "related_questions": result.get("related_questions", []),
+                    "local_results": result.get("local_results", [])
+                }
+                
+                return json.dumps(search_info, ensure_ascii=False, indent=2)
             
-            # 包装search_google_maps
+            # 包装search_google_maps - 返回完整结果
             @tool
-            async def search_google_maps_tool(query: str) -> str:
-                """搜索Google地图上的地点或服务"""
-                result = await search_google_maps(query=query)
-                if isinstance(result, dict):
-                    if "error" in result:
-                        return f"地图搜索失败: {result['error']}"
-                    elif "local_results" in result:
-                        results = result["local_results"][:5]  # 取前5个结果
-                        map_summary = []
-                        for r in results:
-                            title = r.get('title', '')
-                            address = r.get('address', '')
-                            rating = r.get('rating', '')
-                            map_summary.append(f"{title} - {address} - 评分:{rating}")
-                        return f"找到 {len(results)} 个地点:\n" + "\n".join(map_summary)
-                    else:
-                        return f"地图搜索完成，结果: {list(result.keys())}"
-                else:
-                    return str(result)
+            async def search_google_maps_tool(query: str, location_ll: str = None) -> str:
+                """搜索Google地图上的地点或服务，返回完整的地图搜索结果"""
+                result = await search_google_maps(query=query, location_ll=location_ll)
+                
+                # 如果有错误，返回错误信息
+                if isinstance(result, dict) and "error" in result:
+                    return f"地图搜索失败: {result['error']}"
+                
+                # 返回完整的地图搜索结果
+                map_info = {
+                    "query": query,
+                    "search_metadata": result.get("search_metadata", {}),
+                    "local_results": result.get("local_results", []),
+                    "place_results": result.get("place_results", {}),
+                    "related_places": result.get("related_places", [])
+                }
+                
+                return json.dumps(map_info, ensure_ascii=False, indent=2)
             
-            # 包装search_google_flights
+            # 包装search_google_flights - 返回完整结果
             @tool
-            async def search_google_flights_tool(departure_id: str, arrival_id: str, outbound_date: str, flight_type: str = "round_trip", return_date: str = None) -> str:
-                """搜索Google航班信息"""
-                # 自动处理日期，如果没有提供或日期不合理
+            async def search_google_flights_tool(departure_id: str, arrival_id: str, outbound_date: str, 
+                                               flight_type: str = "round_trip", return_date: str = None,
+                                               adults: str = "1", currency: str = "CNY") -> str:
+                """搜索Google航班信息，返回完整的航班搜索结果"""
+                # 自动处理日期
                 from datetime import datetime, timedelta
                 today = datetime.now()
                 
@@ -178,31 +235,40 @@ class MCPManager:
                     arrival_id=arrival_id,
                     outbound_date=outbound_date,
                     flight_type=flight_type,
-                    return_date=return_date
+                    return_date=return_date,
+                    adults=adults,
+                    currency=currency
                 )
-                if isinstance(result, dict):
-                    if "error" in result:
-                        return f"航班搜索失败: {result['error']}"
-                    elif "flights" in result:
-                        flights = result["flights"][:5]  # 取前5个航班
-                        flight_summary = []
-                        for flight in flights:
-                            airline = flight.get('airline', '')
-                            departure_time = flight.get('departure_time', '')
-                            arrival_time = flight.get('arrival_time', '')
-                            price = flight.get('price', '')
-                            flight_summary.append(f"{airline} - {departure_time}到{arrival_time} - {price}")
-                        return f"找到 {len(flights)} 个航班:\n" + "\n".join(flight_summary)
-                    else:
-                        return f"航班搜索完成，结果: {list(result.keys())}"
-                else:
-                    return str(result)
+                
+                # 如果有错误，返回错误信息
+                if isinstance(result, dict) and "error" in result:
+                    return f"航班搜索失败: {result['error']}"
+                
+                # 返回完整的航班搜索结果
+                flight_info = {
+                    "search_parameters": {
+                        "departure_id": departure_id,
+                        "arrival_id": arrival_id,
+                        "outbound_date": outbound_date,
+                        "return_date": return_date,
+                        "adults": adults,
+                        "currency": currency
+                    },
+                    "search_metadata": result.get("search_metadata", {}),
+                    "best_flights": result.get("best_flights", []),
+                    "other_flights": result.get("other_flights", []),
+                    "price_insights": result.get("price_insights", {}),
+                    "airports": result.get("airports", [])
+                }
+                
+                return json.dumps(flight_info, ensure_ascii=False, indent=2)
             
-            # 包装search_google_hotels
+            # 包装search_google_hotels - 返回完整结果
             @tool
-            async def search_google_hotels_tool(q: str, check_in_date: str = None, check_out_date: str = None) -> str:
-                """搜索Google酒店信息"""
-                # 如果没有提供日期，自动使用合理的未来日期
+            async def search_google_hotels_tool(q: str, check_in_date: str = None, check_out_date: str = None,
+                                              adults: str = "1", currency: str = "CNY") -> str:
+                """搜索Google酒店信息，返回完整的酒店搜索结果"""
+                # 自动处理日期
                 from datetime import datetime, timedelta
                 today = datetime.now()
                 
@@ -211,39 +277,45 @@ class MCPManager:
                 if not check_out_date:
                     check_out_date = (today + timedelta(days=3)).strftime("%Y-%m-%d")
                 
-                # 验证日期是否合理（不能是过去日期）
+                # 验证日期
                 try:
                     check_in = datetime.strptime(check_in_date, "%Y-%m-%d")
                     if check_in.date() < today.date():
-                        # 如果入住日期是过去，调整为明天
                         check_in_date = (today + timedelta(days=1)).strftime("%Y-%m-%d")
                         check_out_date = (today + timedelta(days=3)).strftime("%Y-%m-%d")
                 except ValueError:
-                    # 如果日期格式错误，使用默认日期
                     check_in_date = (today + timedelta(days=1)).strftime("%Y-%m-%d")
                     check_out_date = (today + timedelta(days=3)).strftime("%Y-%m-%d")
                 
                 result = await search_google_hotels(
                     q=q,
                     check_in_date=check_in_date,
-                    check_out_date=check_out_date
+                    check_out_date=check_out_date,
+                    adults=adults,
+                    currency=currency
                 )
-                if isinstance(result, dict):
-                    if "error" in result:
-                        return f"酒店搜索失败: {result['error']}"
-                    elif "properties" in result:
-                        properties = result["properties"][:5]  # 取前5个酒店
-                        hotel_list = []
-                        for prop in properties:
-                            title = prop.get('title', '未知酒店')
-                            price = prop.get('price', '价格未知')
-                            rating = prop.get('rating', '评分未知')
-                            hotel_list.append(f"{title} - {price} - 评分:{rating}")
-                        return f"找到 {len(properties)} 个酒店: {'; '.join(hotel_list)}"
-                    else:
-                        return f"酒店搜索完成，结果: {list(result.keys())}"
-                else:
-                    return str(result)
+                
+                # 如果有错误，返回错误信息
+                if isinstance(result, dict) and "error" in result:
+                    return f"酒店搜索失败: {result['error']}"
+                
+                # 返回完整的酒店搜索结果
+                hotel_info = {
+                    "search_parameters": {
+                        "location": q,
+                        "check_in_date": check_in_date,
+                        "check_out_date": check_out_date,
+                        "adults": adults,
+                        "currency": currency
+                    },
+                    "search_metadata": result.get("search_metadata", {}),
+                    "properties": result.get("properties", []),
+                    "brands": result.get("brands", []),
+                    "property_types": result.get("property_types", []),
+                    "filters": result.get("filters", {})
+                }
+                
+                return json.dumps(hotel_info, ensure_ascii=False, indent=2)
             
             tools = [
                 get_current_time_tool,
@@ -253,11 +325,11 @@ class MCPManager:
                 search_google_hotels_tool
             ]
             
-            print(f"异步加载了 {len(tools)} 个本地MCP工具")
+            print(f"✅ [MCP] 直接导入模式：加载了 {len(tools)} 个本地MCP工具（返回完整API响应）")
             return tools
             
         except Exception as e:
-            print(f"异步加载MCP工具失败: {e}")
+            print(f"❌ [MCP] 直接导入模式也失败: {e}")
             return []
     
     def load_tools_sync(self) -> List[Any]:
@@ -276,7 +348,7 @@ class MCPManager:
 class AsyncSyncWrapper:
     """异步同步转换工具"""
     @staticmethod
-    def run_async_in_thread(async_func_or_coro, timeout: int = 60):
+    def run_async_in_thread(async_func_or_coro, timeout: int = 1200):
         """在线程池中运行异步函数或协程"""
         def sync_wrapper():
             if callable(async_func_or_coro):
@@ -289,7 +361,11 @@ class AsyncSyncWrapper:
         
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(sync_wrapper)
-            return future.result(timeout=timeout)
+            try:
+                return future.result(timeout=timeout)
+            except concurrent.futures.TimeoutError:
+                print(f"⚠️ [超时错误] 异步任务执行超时 ({timeout}秒)，正在返回默认响应")
+                return "信息收集超时，请稍后重试或检查网络连接。"
 
 class StreamingUtils:
     """流式输出工具"""
@@ -332,7 +408,7 @@ class InformationCollectorAgent:
         
         # print(f"\n🔍 [MCP调试] 开始信息收集，用户请求: {user_request}")
         print(f"🔧 [MCP调试] 可用工具数量: {len(self.tools)}")
-        
+
         collector_request = f"{INFORMATION_COLLECTOR_PROMPT}\n用户需求:{user_request}"
         
         print(f"📝 [MCP调试] 发送给智能体的提示词长度: {len(collector_request)} 字符")
@@ -347,7 +423,12 @@ class InformationCollectorAgent:
             response_content = ResponseExtractor.extract_agent_response(response)
             
             print(f"✅ [MCP调试] 信息收集完成，响应长度: {len(response_content)} 字符")
-            # print(f"📊 [MCP调试] 响应内容预览: {response_content[:200]}...")
+            print(f"📊 [MCP调试] 完整响应内容: {response_content}")
+            
+            # 确保响应内容不为空
+            if not response_content or len(response_content.strip()) < 20:
+                print("⚠️  [MCP调试] 响应内容过短，可能出现问题")
+                return "信息收集完成，但响应内容异常短，请检查系统状态。"
             
             return response_content
             
@@ -356,16 +437,45 @@ class InformationCollectorAgent:
             import traceback
             traceback.print_exc()
             return f"信息收集失败: {str(e)}"
-    
+    def collect_information(self, user_request: str) -> str:  # noqa: D401
+        """Collect information **synchronously** and return **plain text** only."""
+        return AsyncSyncWrapper.run_async_in_thread(
+            lambda: self.collect_information_async(user_request)
+        )
+
+    def get_response_stream_with_frontend(self, message: str):
+        """把收集结果以 dict 形式首发，留给上层包装"""
+        try:
+            full_response = AsyncSyncWrapper.run_async_in_thread(
+                lambda: self.collect_information_async(message)
+            )
+            if not full_response:
+                full_response = "信息收集完成，但内容为空。"
+            # 直接返回 Python dict，不再自己 json.dumps
+            
+            yield {"info_collection_result": full_response}
+            return full_response
+        except Exception as e:
+            yield {"info_collection_result": f"信息收集失败: {e}"}
+            return f"信息收集失败: {e}"
+        
     def get_response_stream(self, message: str):
         """获取响应流"""
         try:
             full_response = AsyncSyncWrapper.run_async_in_thread(
                 lambda: self.collect_information_async(message)
             )
+            
+            # 确保响应不为空或只是错误信息
+            if not full_response or full_response.startswith("处理请求时出现错误:"):
+                print(f"⚠️  [信息收集] 响应为空或包含错误，尝试返回基本信息")
+                full_response = f"已收到您的旅行规划请求：{message}。正在为您准备详细的旅行信息..."
+            
             yield from StreamingUtils.stream_text(full_response)
         except Exception as e:
-            yield f"处理请求时出现错误: {str(e)}"
+            error_msg = f"信息收集过程中出现错误: {str(e)}"
+            print(f"❌ [信息收集] {error_msg}")
+            yield error_msg
 
 class PlannerAgent:
     """行程规划智能体"""
@@ -374,14 +484,30 @@ class PlannerAgent:
         self.llm_normal = llm_normal
         print("行程规划智能体已创建")
         
-    def get_response_stream(self, message: str, collected_info: str = "", conversation_history: list = None):
-        """获取真流式响应（支持对话记忆）"""
+    def get_response_stream(self, message: str, collected_info: str = "", conversation_history: list = None, raw_mcp_results: dict = None):
+        """获取真流式响应（支持对话记忆和原始MCP数据）"""
         # 构建规划请求内容
         if collected_info:
             planning_content = f"用户原始需求：\n{message}\n\n信息收集智能体提供的详细信息：\n{collected_info}"
         else:
             planning_content = f"用户需求：\n{message}"
-        planning_content = planning_content + rag_search(message, top_k=3)['context']  # 添加RAG搜索结果
+        
+        # 添加RAG搜索结果
+        planning_content = planning_content + rag_search(message, top_k=3)['context']
+        
+        # 如果有原始MCP数据，添加到规划内容中
+        if raw_mcp_results:
+            planning_content += "\n\n=== 重要：原始API搜索结果 ===\n"
+            planning_content += "**请严格基于以下真实API数据进行规划，不要生成虚假信息：**\n\n"
+            
+            for data_type, raw_data in raw_mcp_results.items():
+                planning_content += f"\n### {data_type.upper()}原始数据:\n{raw_data}\n"
+            
+            planning_content += "\n**重要提醒：请严格使用上述真实API数据中的具体信息（如航班号、价格、酒店名称等），不要编造任何虚假信息。**\n"
+            
+            print(f"📊 [旅行规划] 已添加原始MCP数据到规划内容，类型: {list(raw_mcp_results.keys())}")
+        else:
+            print("⚠️  [旅行规划] 未收到原始MCP数据，将基于已有信息进行规划")
         
         # 构建包含历史记忆的消息列表
         messages = [SystemMessage(content=ITINERARY_PLANNER_PROMPT)]
@@ -524,6 +650,77 @@ class AgentService:
             'memory': memory,
         }
 
+    
+    def _get_city_code(self, city_name: str) -> str:
+        """获取城市的机场代码"""
+        # 常见城市代码映射
+        city_codes = {
+            "上海": "SHA", "北京": "PEK", "广州": "CAN", "深圳": "SZX",
+            "成都": "CTU", "杭州": "HGH", "西安": "XIY", "重庆": "CKG",
+            "南京": "NKG", "武汉": "WUH", "青岛": "TAO", "大连": "DLC",
+            "厦门": "XMN", "昆明": "KMG", "长沙": "CSX", "郑州": "CGO"
+        }
+        
+        for city, code in city_codes.items():
+            if city in city_name:
+                return code
+        
+        # 如果找不到匹配的城市，返回默认值
+        return "SHA" if "上海" in city_name else "PEK"
+    
+    def _extract_departure_id(self, message: str) -> str:
+        """从消息中提取出发地代码"""
+        # 常见城市代码映射
+        city_codes = {
+            "上海": "SHA", "北京": "PEK", "广州": "CAN", "深圳": "SZX",
+            "成都": "CTU", "杭州": "HGH", "西安": "XIY", "重庆": "CKG"
+        }
+        
+        for city, code in city_codes.items():
+            if city in message and ("出发" in message or "从" in message):
+                return code
+        
+        return "SHA"  # 默认上海
+    
+    def _extract_arrival_id(self, message: str) -> str:
+        """从消息中提取目的地代码"""
+        # 常见城市代码映射
+        city_codes = {
+            "上海": "SHA", "北京": "PEK", "广州": "CAN", "深圳": "SZX",
+            "成都": "CTU", "杭州": "HGH", "西安": "XIY", "重庆": "CKG"
+        }
+        
+        for city, code in city_codes.items():
+            if city in message and ("目的地" in message or "到" in message or "去" in message):
+                return code
+        
+        return "PEK"  # 默认北京
+    
+    def _extract_destination(self, message: str) -> str:
+        """从消息中提取目的地名称"""
+        # 从消息中提取目的地
+        destinations = ["北京", "上海", "广州", "深圳", "成都", "杭州", "西安", "重庆"]
+        
+        for dest in destinations:
+            if dest in message:
+                return dest
+        
+        return "北京"  # 默认北京
+    
+    def _extract_outbound_date(self, message: str) -> str:
+        """从消息中提取出发日期"""
+        # 简化实现，返回明天
+        from datetime import datetime, timedelta
+        tomorrow = datetime.now() + timedelta(days=1)
+        return tomorrow.strftime("%Y-%m-%d")
+    
+    def _extract_return_date(self, message: str) -> str:
+        """从消息中提取返回日期"""
+        # 简化实现，返回一周后
+        from datetime import datetime, timedelta
+        next_week = datetime.now() + timedelta(days=7)
+        return next_week.strftime("%Y-%m-%d")
+
     def get_or_create_agent_session(self, user_email: str, conv_id: str) -> Dict[str, Any]:
         """获取或创建用户的智能体会话"""
         session_key = f"{user_email}_{conv_id}"
@@ -531,7 +728,7 @@ class AgentService:
             self.agent_sessions[session_key] = self._create_agent_session(user_email, conv_id)
         return self.agent_sessions[session_key]
 
-    def get_response_stream(self, user_message: str, user_email: str, agent_type: str = "general", conv_id: Optional[str] = None):
+    def get_response_stream(self, user_message: str, user_email: str, agent_type: str = "general", conv_id: Optional[str] = None, form_data: dict = None,collected_info: str = ""):
         """处理用户请求并返回响应流（支持Redis记忆）"""
         if not conv_id:
             raise ValueError("Conversation ID (conv_id) 不能为空")
@@ -557,46 +754,51 @@ class AgentService:
                 # print(sql_message)
             
             elif agent_type == "travel":
+
                 if is_travel_planning_request(user_message):
-                    # Multi-agent workflow with memory
-                    collector_agent = session['collector']
-                    planner_agent = session['planner']
+                    collector: InformationCollectorAgent = session["collector"]
+                    planner  : PlannerAgent            = session["planner"]
 
-                    '''
-                    print(f"\n🎯 [旅行规划] 检测到旅行规划请求: {user_message}")
-                    print(f"🔧 [旅行规划] 信息收集智能体工具数量: {len(collector_agent.tools)}")
-                    print(f"📅 [旅行规划] 开始信息收集阶段...")
-                    
-                    print("旅行规划流程: [1] 信息收集中...")
-                    '''
-
-                    # 直接使用同步方式调用信息收集
-                    collected_info = collector_agent.get_response_stream(user_message)
-                    # 收集完整响应
-                    collected_info_text = ""
-                    for chunk in collected_info:
-                        collected_info_text += chunk
-                    
-                    print(f"📊 [旅行规划] 信息收集完成，收集到的信息长度: {len(collected_info_text)} 字符")
-                    # print(f"📋 [旅行规划] 收集到的信息预览: {collected_info_text[:300]}...")
-                    print("旅行规划流程: [2] 开始流式行程规划...")
-                    generator = planner_agent.get_response_stream(user_message, collected_info, conversation_history)
+                    # ① 先启动信息收集 —— 立即把结果 forward 给前端
+                    info_text = ""
+                    for event in collector.get_response_stream_with_frontend(user_message):
+                        if isinstance(event, dict) and "info_collection_result" in event:
+                            info_text = event["info_collection_result"]
+                            full_response += info_text + "\n\n"          # 让它也写入 DB
+                            yield event
+                            continue                                     # <— 关键：跳过本轮，其它逻辑留给下一轮
+                        yield event
+                        
+                    for txt in planner.get_response_stream(
+                            user_message,
+                            collected_info=info_text,
+                            conversation_history=conversation_history):
+                        full_response += txt
+                        yield txt
+                    return
+                
                 else:
-                    # Simple travel question with memory
                     agent = session['normal_agent']
                     generator = agent.get_response_stream(user_message, conversation_history)
+
+
+            
 
             elif agent_type == "pdf_generator":
                 agent = session['pdf_agent']
                 generator = agent.get_response_stream(user_message, conversation_history)
             
             else:
-                raise ValueError(f"未知的智能体类型: {agent_type}")
-
-            # 从生成器消费内容并更新记忆
-            for chunk in generator:
-                full_response += chunk
-                yield chunk
+                # Simple travel question with memory
+                agent = session['normal_agent']
+                generator = agent.get_response_stream(user_message, conversation_history)
+            
+            # 只有非旅行规划请求才需要从生成器消费内容
+            if agent_type != "travel" or not is_travel_planning_request(user_message):
+                # 从生成器消费内容并更新记忆
+                for chunk in generator:
+                    full_response += chunk
+                    yield chunk
             
             # 保存对话到Redis记忆中
             memory.add_message("user", user_message)
@@ -659,12 +861,12 @@ def get_agent_service(redis_config=None) -> AgentService:
     return _agent_service
 
 # --- 旧函数接口，现在代理到 AgentService ---
-def get_agent_response_stream(user_message, user_email, agent_type="general", conv_id=None):
+def get_agent_response_stream(user_message, user_email, agent_type="general", conv_id=None, form_data=None):
     """
     [兼容性接口] 获取智能体响应流。
     此函数现在是 AgentService.get_response_stream 的一个简单包装。
     """
-    return get_agent_service().get_response_stream(user_message, user_email, agent_type, conv_id)
+    return get_agent_service().get_response_stream(user_message, user_email, agent_type, conv_id, form_data)
 
 def load_mcp_tools_async():
     """[兼容性接口] 异步加载MCP工具"""
