@@ -418,10 +418,9 @@ class PdfAgent:
             return "暂无对话历史记录，无法生成PDF报告。"
         
         conversation_text = self._format_conversation_history(conversation_history)
-        summary = self._generate_conversation_summary(conversation_text, user_request)
         detailed_guide = self._generate_travel_guide(conversation_text, user_request)
         full_content = f"# 旅行对话记录\n\n{conversation_text}\n\n---\n\n# 详细旅游攻略\n\n{detailed_guide}"
-        pdf_result = self.pdf_generator.generate_travel_pdf(conversation_data=full_content, summary=summary, user_info="user") # user_info can be enhanced
+        pdf_result = self.pdf_generator.generate_travel_pdf(conversation_data=full_content, summary=detailed_guide, user_info="user") # user_info can be enhanced
         return f"📄{pdf_result}"
     
     def _format_conversation_history(self, conversation_history: list) -> str:
