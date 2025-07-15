@@ -130,7 +130,7 @@ class PDFGeneratorTool:
             parent=styles['Heading1'],
             fontSize=20,
             spaceAfter=30,
-            textColor=HexColor('#4CAF50')
+            textColor=HexColor("#210DB3")
         )
         story.append(Paragraph("智能旅行规划报告", title_style))
         story.append(Spacer(1, 12))
@@ -195,7 +195,7 @@ AI总结概括报告:
                     color: #333;
                 }}
                 h1, h2, h3 {{ 
-                    color: #4CAF50; 
+                    color: #210DB3; 
                     margin-top: 30px;
                     margin-bottom: 15px;
                 }}
@@ -275,12 +275,6 @@ AI总结概括报告:
             <div>
                 {markdown.markdown(summary, extensions=['tables', 'fenced_code', 'codehilite']) if summary else '<p>暂无总结信息</p>'}
             </div>
-            
-            <h2>💬 完整对话记录</h2>
-            <div>
-                {markdown.markdown(conversation_data, extensions=['tables', 'fenced_code', 'codehilite'])}
-            </div>
-            
             <div class="footer">
                 <p>本报告由青鸾向导AI旅行规划系统生成</p>
             </div>
