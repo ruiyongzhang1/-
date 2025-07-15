@@ -271,8 +271,8 @@ header {
 /* 输入框本体 */
 .input-wrapper {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  flex-direction: column; /* 改为垂直布局 */
+  gap: 12px; /* 添加间距 */
   background: rgba(255, 255, 255, 0.85);
   border-radius: 30px;
   box-shadow: var(--input-shadow, 0 4px 16px rgba(0, 0, 0, 0.1));
@@ -280,8 +280,14 @@ header {
   padding: 12px 20px;
   backdrop-filter: blur(4px);
   box-sizing: border-box;
+  position: relative;
 }
 
+
+/* 输入框容器样式 */
+.message-input-container {
+  width: 100%;
+}
 
 /* 输入框样式 */
 #message-input {
@@ -291,8 +297,8 @@ header {
   border-radius: 12px;
   resize: none; /* 隐藏拖动条 */
   font-size: clamp(14px, 2.5vw, 16px);
-  min-height: 56px;
-  max-height: calc(1.5em * 10 + 32px); /* 约 5 行文字 + 内边距 */
+  min-height: 50px; /* 减少最小高度，只显示一行 */
+  max-height: calc(1.5em * 10 + 40px); /* 增加最大高度 */
   background: white;
   color: #100000;
   box-sizing: border-box;
@@ -308,27 +314,43 @@ header {
   color: rgba(107, 114, 128, 0.7);
 }
 
-/* 发送按钮样式（单独占一行） */
-#send-btn {
+/* 通用按钮样式 */
+.action-btn {
   width: 40px;
   height: 40px;
-  right: 10px;
-  bottom: 10px;
   background: white;
   border: 1px solid rgba(0, 0, 0, 0.15);
   padding: 0;
   cursor: pointer;
   border-radius: 50%;
   transition: background 0.2s ease;
-  align-self: flex-end; /* 将按钮对齐到右侧 */
+  position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
-#send-btn:hover {
+.action-btn:hover {
   background: rgba(0, 0, 0, 0.15);
+}
+
+/* 按钮容器样式 */
+.button-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+/* 发送按钮样式 */
+#send-btn {
+  position: static;
+}
+
+/* 搜索切换按钮样式 */
+.search-toggle-btn {
+  position: static;
 }
 
 #send-btn:disabled {
@@ -892,4 +914,19 @@ header {
 
 #history-modal .history-footer {
   background: #ffffff !important; /* 底部按钮区域也为纯白色 */
+}
+
+
+
+.search-toggle-btn.active {
+  background: #6b7280; /* 灰色背景 */
+  border-color: #6b7280;
+  color: white;
+}
+
+.search-toggle-btn.active:hover {
+  background: #4b5563; /* 深灰色悬停 */
+  border-color: #4b5563;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
 }
