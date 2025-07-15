@@ -24,7 +24,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const historyList = document.getElementById('history-list');       // 历史记录列表容器
     const newChatBtn = document.getElementById('new-chat-btn');        // 新建对话按钮
     const email = document.querySelector('.user-info span')?.textContent; // 当前用户邮箱，用于加载和清空历史
-
+    const searchToggleBtn = document.getElementById('search-toggle-btn'); // 搜索切换按钮
+    // 搜索模式状态
+    let isSearchMode = false;
     /** 滚动到底部 */
     function scrollToBottom() {
         chatBox.scrollTop = chatBox.scrollHeight;
@@ -37,9 +39,23 @@ document.addEventListener('DOMContentLoaded', function () {
         const newHeight = Math.min(messageInput.scrollHeight, maxHeight);
         messageInput.style.height = newHeight + 'px';
     }
-
+    
     messageInput.addEventListener('input', adjustTextareaHeight);
-
+     /** 切换搜索模式 */
+    function toggleSearchMode() {
+        isSearchMode = !isSearchMode;
+        searchToggleBtn.classList.toggle('active', isSearchMode);
+        
+        // 更新按钮提示文本
+        if (isSearchMode) {
+            searchToggleBtn.title = "已启用联网搜索模式，点击取消";
+        } else {
+            searchToggleBtn.title = "切换联网搜索模式";
+        }
+        
+        console.log('搜索模式:', isSearchMode ? 'travel' : 'general');
+    }
+    
     /** 添加消息到聊天框 */
     function addMessage(content, isUser = false) {
         const messageDiv = document.createElement('div');
@@ -143,7 +159,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     message: message,
-                    agent_type: 'general'  // 添加智能体类型
+                    agent_type: isSearchMode ? 'travel' : 'general'  
                 })
             });
 
