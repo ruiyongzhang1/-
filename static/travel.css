@@ -670,7 +670,7 @@ body {
 }
 
 .modal-content .form-control {
-    padding: 14px 18px;
+    padding: 10px 18px;
     border: 2px solid #e5e7eb;
     border-radius: 12px;
     font-family: inherit;
@@ -694,7 +694,7 @@ body {
     display: flex;
     align-items: center;
     cursor: pointer;
-    padding: 12px;
+    padding: 10px;
     border: 2px solid #e2e8f0;
     border-radius: 8px;
     transition: all 0.3s ease;
@@ -997,4 +997,105 @@ body {
   background:#f6f8fc;
   border-left:4px solid #4a90e2;
   margin-top: 12px;
+}
+
+
+
+/* 模态框按钮样式 - 完全重新设计 */
+.modal-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: flex-end;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.modal-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: none;
+    min-width: 120px;
+    height: auto;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    line-height: 1.5;
+}
+
+/* 取消按钮样式 */
+.modal-action-cancel {
+    background: rgba(243, 244, 246, 0.9);
+    color: #4b5563;
+    border: 1px solid #e5e7eb;
+}
+
+.modal-action-cancel:hover {
+    background: rgba(229, 231, 235, 0.95);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* 确认按钮样式 */
+.modal-action-confirm {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.modal-action-confirm:hover {
+    background: linear-gradient(135deg, #5a73d8 0%, #6a44a0 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.3);
+}
+
+/* 按钮点击效果 */
+.modal-action-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 按钮图标 */
+.modal-action-confirm::after {
+    content: '→';
+    margin-left: 8px;
+    font-size: 16px;
+    transition: transform 0.3s ease;
+}
+
+.modal-action-cancel::after {
+    content: '×';
+    margin-left: 8px;
+    font-size: 18px;
+    font-weight: 700;
+    transition: transform 0.3s ease;
+}
+
+.modal-action-confirm:hover::after {
+    transform: translateX(3px);
+}
+
+.modal-action-cancel:hover::after {
+    transform: rotate(90deg);
+}
+
+/* 确保按钮在移动端完全显示 */
+@media (max-width: 480px) {
+    .modal-actions {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .modal-action-btn {
+        width: 100%;
+        padding: 14px;
+    }
 }
