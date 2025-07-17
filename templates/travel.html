@@ -170,9 +170,14 @@
                     </div>
                 </div>
             </div>
+            <!-- 修改 travel.html 中的按钮部分 -->
             <div class="modal-actions">
-                <button class="btn-secondary" onclick="closeAttractionGuideDialog()">取消</button>
-                <button class="btn-primary" onclick="startAttractionGuideFromModal()">开始讲解</button>
+                <button class="modal-action-btn modal-action-cancel" onclick="closeAttractionGuideDialog()">
+                    <span>取消</span>
+                </button>
+                <button class="modal-action-btn modal-action-confirm" onclick="startAttractionGuideFromModal()">
+                    <span>开始讲解</span>
+                </button>
             </div>
         </div>
     </div>
