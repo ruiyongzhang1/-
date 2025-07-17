@@ -81,6 +81,7 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.transportation_mode = ['公共交通'];
         }
         
+        
         if (formData.dietary_restrictions.length === 0) {
             formData.dietary_restrictions = ['无特殊要求'];
         }
@@ -233,6 +234,12 @@ function startTravelPlanning(formData) {
     function pump() {
       reader.read().then(({ done, value }) => {
         if (done) {
+          // ========== 新增：记录AI响应到对话历史 ==========
+          conversationHistory.push({
+            content: planText,
+            isUser: false
+          });
+          
           /* ========== 全部结束，插入信息收集卡片 ========== */
           if (infoText) {
             const infoBubble = addMessage('', false);

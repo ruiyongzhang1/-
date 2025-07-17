@@ -55,6 +55,8 @@ document.addEventListener('DOMContentLoaded', function () {
         
         console.log('搜索模式:', isSearchMode ? 'travel' : 'general');
     }
+
+    searchToggleBtn.addEventListener('click', toggleSearchMode);
     
     /** 添加消息到聊天框 */
     function addMessage(content, isUser = false) {

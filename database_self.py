@@ -114,10 +114,10 @@ class Database:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            
+            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             cursor.execute(
-                'INSERT INTO users (email, password) VALUES (?, ?)',
-                (email, password)
+                'INSERT INTO users (email, password, created_at, updated_at) VALUES (?, ?, ?, ?)',
+                (email, password, now_str, now_str)
             )
             
             conn.commit()
@@ -161,7 +161,7 @@ class Database:
             cursor = conn.cursor()
             
             today = datetime.now().strftime('%Y-%m-%d')
-            
+            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             # 检查对话是否已存在
             cursor.execute(
                 'SELECT id FROM conversations WHERE id = ?',
@@ -171,19 +171,20 @@ class Database:
             if not cursor.fetchone():
                 # 创建新对话
                 cursor.execute(
-                    'INSERT INTO conversations (id, user_email, date) VALUES (?, ?, ?)',
-                    (conv_id, email, today)
+                    'INSERT INTO conversations (id, user_email, date, created_at) VALUES (?, ?, ?, ?)',
+                    (conv_id, email, today, now_str)
                 )
             
             # 保存消息
             for message in messages:
                 cursor.execute(
-                    'INSERT INTO messages (conversation_id, text, is_user, agent_type) VALUES (?, ?, ?, ?)',
+                    'INSERT INTO messages (conversation_id, text, is_user, agent_type, created_at) VALUES (?, ?, ?, ?, ?)',
                     (
                         conv_id,
                         message.get('text', ''),
                         message.get('is_user', False),
-                        message.get('agent_type', 'general')
+                        message.get('agent_type', 'general'),
+                        now_str
                     )
                 )
             
@@ -841,7 +842,7 @@ class Database:
                 # 检查是否已有管理员
                 cursor.execute('SELECT COUNT(*) as count FROM admins')
                 count = cursor.fetchone()['count']
-                
+                now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 if count == 0:
                     # 从环境变量获取初始管理员信息
                     initial_username = os.getenv('INITIAL_ADMIN_USERNAME', 'admin')
@@ -854,8 +855,8 @@ class Database:
                     hashed_password = generate_password_hash(initial_password)
                     
                     cursor.execute(
-                        'INSERT INTO admins (username, password, email, role) VALUES (?, ?, ?, ?)',
-                        (initial_username, hashed_password, initial_email, 'superadmin')
+                        'INSERT INTO admins (username, password, email, role, created_at) VALUES (?, ?, ?, ?, ?)',
+                        (initial_username, hashed_password, initial_email, 'superadmin', now_str)
                     )
                     conn.commit()
                 
@@ -872,10 +873,10 @@ class Database:
             
             from werkzeug.security import generate_password_hash
             hashed_password = generate_password_hash(password)
-            
+            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             cursor.execute(
-                'INSERT INTO admins (username, password, email, role) VALUES (?, ?, ?, ?)',
-                (username, hashed_password, email, role)
+                'INSERT INTO admins (username, password, email, role, created_at) VALUES (?, ?, ?, ?, ?)',
+                (username, hashed_password, email, role, now_str)
             )
             
             conn.commit()
@@ -1063,12 +1064,12 @@ class Database:
         try:
             conn = self.get_connection()
             cursor = conn.cursor()
-            
+            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             cursor.execute('''
-                INSERT INTO admin_logs (admin_id, action, target_type, target_id, details)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (admin_id, action, target_type, target_id, details))
-            
+                INSERT INTO admin_logs (admin_id, action, target_type, target_id, details, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (admin_id, action, target_type, target_id, details, now_str))
+
             conn.commit()
             conn.close()
             return True

@@ -91,3 +91,4 @@ mysql
 mysql.connector
 gunicorn
 pymysql
+flask

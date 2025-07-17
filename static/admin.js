@@ -9,6 +9,7 @@ let currentSearch = {
 let currentAdminPage = 1;
 let currentLogPage = 1;
 
+let currentPage = 1;
 const itemsPerPage = 10;
 
 // 初始化页面
